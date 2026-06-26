@@ -39,7 +39,7 @@ export function SiteHeader() {
               FAQ
             </Link>
             <Link href="/upload" className="hover:text-foreground transition-colors">
-              Upload
+              FAQ generator
             </Link>
             <Link href="/types" className="hover:text-foreground transition-colors">
               Categories

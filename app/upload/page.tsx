@@ -1,7 +1,7 @@
 import { UploadForm } from "@/components/upload-form";
 
 export const metadata = {
-  title: "Upload document · SCG ThaiSEC",
+  title: "FAQ generator · SCG ThaiSEC",
 };
 
 export default function UploadPage() {
@@ -9,13 +9,13 @@ export default function UploadPage() {
     <div className="container py-12 max-w-2xl">
       <p className="eyebrow">Admin</p>
       <h1 className="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight">
-        Upload a document
+        FAQ generator
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Drop a PDF, DOCX, TXT, or MD file. We extract the text, save it as a
-        source document, and immediately ask the AI to draft FAQs grounded in
-        the content. Drafts go to <span className="font-medium text-foreground">/faq</span> for
-        review.
+        Drop a PDF, DOCX, TXT, or MD source document. We extract the text and
+        immediately ask the AI to draft FAQ pairs grounded in the content.
+        Drafts go to <span className="font-medium text-foreground">/faq</span> for
+        review and verification.
       </p>
 
       <div className="mt-4 rounded-md border border-amber-200 bg-amber-50/60 px-4 py-3 text-[12px] text-amber-900">
