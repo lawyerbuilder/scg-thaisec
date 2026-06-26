@@ -121,9 +121,39 @@ export default async function RegulationsPage({
 
       {rows.length === 0 ? (
         <div className="mt-12 surface p-8 text-center">
-          <p className="font-medium text-foreground">No regulations indexed yet.</p>
+          <p className="font-medium text-foreground">
+            {typeSlug === "uploaded-document"
+              ? "No documents uploaded yet."
+              : typeSlug === "agm-playbook"
+              ? "Playbook not loaded yet."
+              : typeSlug
+              ? "Nothing in this category yet."
+              : "No regulations indexed yet."}
+          </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Run <code className="rounded bg-secondary px-1.5 py-0.5">npm run ingest</code> to populate the database.
+            {typeSlug === "uploaded-document" ? (
+              <>
+                Go to{" "}
+                <Link href="/upload" className="underline underline-offset-2 hover:no-underline">
+                  /upload
+                </Link>{" "}
+                to add a PDF, DOCX, or text document.
+              </>
+            ) : typeSlug === "agm-playbook" ? (
+              <>
+                Run <code className="rounded bg-secondary px-1.5 py-0.5">npm run load:playbook</code>{" "}
+                to import the AGM Compliance Playbook from the Notion export.
+              </>
+            ) : (
+              <>
+                Run <code className="rounded bg-secondary px-1.5 py-0.5">npm run ingest</code>{" "}
+                to crawl the Thai SEC portal, or{" "}
+                <Link href="/upload" className="underline underline-offset-2 hover:no-underline">
+                  /upload
+                </Link>{" "}
+                to add a document manually.
+              </>
+            )}
           </p>
         </div>
       ) : (

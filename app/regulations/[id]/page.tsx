@@ -8,6 +8,7 @@ import {
 import { FavoriteButton } from "@/components/favorite-button";
 import { CopyButton } from "@/components/copy-button";
 import { RegulationCard } from "@/components/regulation-card";
+import { MarkdownBody } from "@/components/markdown-body";
 
 export const revalidate = 600;
 
@@ -27,8 +28,9 @@ export default async function RegulationDetailPage({
 
   const titleEn = reg.titleEn ?? null;
   const titleTh = reg.titleTh;
-  const body = reg.bodyEn || reg.bodyTh || "";
-  const bodyIsThai = !reg.bodyEn && !!reg.bodyTh;
+  const bodyTh = reg.bodyTh ?? "";
+  const bodyEn = reg.bodyEn ?? "";
+  const hasAnyBody = bodyTh.trim().length > 0 || bodyEn.trim().length > 0;
 
   return (
     <div className="container py-12 max-w-4xl">
@@ -128,26 +130,39 @@ export default async function RegulationDetailPage({
               <ExternalLink className="h-3 w-3 text-muted-foreground" />
             </a>
           )}
-          <a
-            href={reg.sourceUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-card px-3 py-1.5 hover:border-foreground/30 transition-colors"
-          >
-            Source <ExternalLink className="h-3 w-3 text-muted-foreground" />
-          </a>
+          {reg.sourceUrl && (
+            <a
+              href={reg.sourceUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-card px-3 py-1.5 hover:border-foreground/30 transition-colors"
+            >
+              Source <ExternalLink className="h-3 w-3 text-muted-foreground" />
+            </a>
+          )}
         </div>
 
-        {body && (
-          <section className="mt-10 surface p-6 sm:p-8 relative">
-            <div className="flex items-center justify-between mb-4">
-              <p className="eyebrow">Full text</p>
-              <CopyButton text={body} />
-            </div>
-            <div className={`regulation-prose text-foreground/90 ${bodyIsThai ? "lang-th" : ""}`}>
-              {body}
-            </div>
-          </section>
+        {hasAnyBody && (
+          <div className="mt-10 space-y-6">
+            {bodyTh.trim() && (
+              <section className="surface p-6 sm:p-8 relative">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="eyebrow">{bodyEn.trim() ? "Thai" : "Full text"}</p>
+                  <CopyButton text={bodyTh} />
+                </div>
+                <MarkdownBody source={bodyTh} isThai />
+              </section>
+            )}
+            {bodyEn.trim() && (
+              <section className="surface p-6 sm:p-8 relative">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="eyebrow">English</p>
+                  <CopyButton text={bodyEn} />
+                </div>
+                <MarkdownBody source={bodyEn} />
+              </section>
+            )}
+          </div>
         )}
       </article>
 

@@ -35,6 +35,12 @@ export function SiteHeader() {
             <Link href="/regulations" className="hover:text-foreground transition-colors">
               Regulations
             </Link>
+            <Link href="/faq" className="hover:text-foreground transition-colors">
+              FAQ
+            </Link>
+            <Link href="/upload" className="hover:text-foreground transition-colors">
+              Upload
+            </Link>
             <Link href="/types" className="hover:text-foreground transition-colors">
               Categories
             </Link>

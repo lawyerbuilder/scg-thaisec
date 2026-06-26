@@ -50,3 +50,6 @@ next-env.d.ts
 
 # local-only notes (keep out of public repo)
 prompt.md
+
+.vercel
+.env*
