@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { listFaqs, listFaqTopics, countFaqs, type FaqListRow } from "@/lib/faqs";
 import { truncate } from "@/lib/utils";
 import { CheckCircle2, FileQuestion, Sparkles, AlertCircle, Search } from "lucide-react";
+import { FaqAskForm } from "@/components/faq-ask-form";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +58,12 @@ export default async function FaqPage({
         </p>
       </div>
 
-      {/* Search bar */}
+      {/* AI ask box — primary entry point. */}
+      <section className="mb-6 surface p-5">
+        <FaqAskForm />
+      </section>
+
+      {/* Keyword search + filter chips for browsing */}
       <form action="/faq" method="get" className="mb-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -66,10 +71,9 @@ export default async function FaqPage({
             type="search"
             name="q"
             defaultValue={query}
-            placeholder="Search FAQs — e.g. quorum, ลงคะแนน, dividend, proxy"
+            placeholder="Or keyword-search the existing FAQs — quorum, ลงคะแนน, dividend, proxy"
             className="w-full h-11 pl-10 pr-3 rounded-md border border-border bg-card text-[14px] placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
-          {/* Preserve other filters as hidden inputs so submit keeps them */}
           {status !== "all" && <input type="hidden" name="status" value={status} />}
           {source !== "all" && <input type="hidden" name="source" value={source} />}
           {topic && <input type="hidden" name="topic" value={topic} />}
