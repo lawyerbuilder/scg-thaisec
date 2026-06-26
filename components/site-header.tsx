@@ -26,7 +26,7 @@ export function SiteHeader() {
                 SCG <span className="text-muted-foreground font-medium">ThaiSEC</span>
               </span>
               <span className="eyebrow mt-1 text-[9px]">
-                Thai SEC regulation library
+                Compliance research + FAQ workspace
               </span>
             </span>
           </Link>

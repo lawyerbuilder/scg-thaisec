@@ -4,11 +4,11 @@ import { SiteHeader } from "@/components/site-header";
 
 export const metadata: Metadata = {
   title: {
-    default: "SCG ThaiSEC — Thai SEC regulation library for SCG Legal",
+    default: "SCG ThaiSEC — Thai capital markets compliance + FAQ workspace",
     template: "%s · SCG ThaiSEC",
   },
   description:
-    "An open-source library of Thai SEC notifications, regulations, and circulars built primarily for the lawyers and compliance officers at SCG Legal.",
+    "A bilingual library of Thai SEC regulations plus an AI-drafted FAQ corpus that SCG Legal reviewers verify. Built for the lawyers and compliance officers at SCG Legal.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -27,8 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <strong className="text-foreground font-medium">
                 Intended for the internal use of SCG personnel only.
               </strong>{" "}
-              An open-source library of Thai SEC notifications, regulations, and circulars
-              indexed from public sources at{" "}
+              A bilingual library of Thai SEC regulations indexed from public sources at{" "}
               <a
                 href="https://capital.sec.or.th/"
                 className="underline-offset-2 hover:underline"
@@ -37,7 +36,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               >
                 capital.sec.or.th
               </a>{" "}
-              and presented for reference and research only.{" "}
+              plus internal SCG playbooks and uploaded documents, with an AI-drafted
+              FAQ corpus that SCG Legal reviewers verify before they appear as
+              authoritative. AI-generated drafts are clearly labeled.{" "}
               <strong className="text-foreground font-medium">Not legal advice.</strong> No
               warranty; no liability. Not affiliated with the Securities and Exchange
               Commission, Thailand or any commercial regulation-library service.

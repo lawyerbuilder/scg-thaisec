@@ -42,11 +42,12 @@ export default async function HomePage() {
         </div>
 
         <h1 className="text-[2.5rem] sm:text-[3.25rem] font-semibold tracking-tight leading-[1.05] text-balance">
-          A regulation library for the Thai capital markets.
+          Thai capital markets compliance — researched, asked, verified.
         </h1>
         <p className="mt-5 text-lg text-muted-foreground text-balance max-w-2xl mx-auto leading-relaxed">
-          Search and browse Thai SEC notifications, regulations, and circulars indexed from
-          public sources at capital.sec.or.th — bilingual, with source attribution.
+          A bilingual library of Thai SEC regulations and an AI-drafted FAQ corpus
+          that SCG Legal reviewers verify. Ask questions in plain Thai or English —
+          the answers cite the source.
         </p>
 
         <div className="mt-10">
