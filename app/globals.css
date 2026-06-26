@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   SCG ThaiSEC — design tokens
+   Brand: SCG red used as a precise signal (one button, one accent, one
+   ribbon), not a saturated banner. Neutrals are faintly warmed toward the
+   brand hue so grays don't look dead next to the red. Same palette as
+   OpenClauses — by design.
+   ============================================================================ */
+
+@layer base {
+  :root {
+    /* Warm off-white background, pure white cards for lift */
+    --background: 24 36% 99%;
+    --foreground: 20 14% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 14% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14% 12%;
+
+    /* SCG red — slightly deepened from pure corporate red for authority */
+    --primary: 354 77% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Warm-tinted neutrals */
+    --secondary: 18 22% 96%;
+    --secondary-foreground: 20 14% 18%;
+    --muted: 18 22% 96%;
+    --muted-foreground: 20 8% 45%;
+    --accent: 18 22% 95%;
+    --accent-foreground: 20 14% 18%;
+
+    --border: 18 16% 91%;
+    --input: 18 16% 91%;
+    --ring: 354 77% 42%;
+
+    --destructive: 0 84% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --radius: 0.625rem;
+
+    /* The red ribbon strip color (slightly brighter than --primary) */
+    --brand-strip: 354 85% 47%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.018em;
+  }
+  /* Selection — branded, restrained */
+  ::selection {
+    background-color: hsl(354 77% 42% / 0.18);
+    color: hsl(var(--foreground));
+  }
+  /* Use the Thai-aware font stack on any element that opts in via lang="th"
+     or the explicit utility. Critical for Thai loop diacritics rendering. */
+  [lang="th"], .lang-th {
+    font-family: theme("fontFamily.thai");
+    line-height: 1.7;
+  }
+}
+
+/* One card language for the whole app — replace ad-hoc cards with these. */
+@layer components {
+  .surface {
+    @apply rounded-xl border bg-card;
+    box-shadow: 0 1px 2px 0 rgb(45 20 15 / 0.04);
+  }
+  .surface-hover {
+    @apply transition-[box-shadow,transform,border-color] duration-200 ease-out;
+  }
+  .surface-hover:hover {
+    @apply border-foreground/15 -translate-y-0.5;
+    box-shadow: 0 6px 18px -8px rgb(45 20 15 / 0.12);
+  }
+
+  /* The thin authoritative red strip at the very top of every page */
+  .brand-strip {
+    height: 3px;
+    background: linear-gradient(
+      to right,
+      hsl(var(--brand-strip)),
+      hsl(354 75% 53%)
+    );
+  }
+
+  /* A small uppercase tracked label — the "OFFICIAL" feel */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
+  }
+}
+
+@layer utilities {
+  mark {
+    background-color: hsl(45 95% 88%);
+    color: inherit;
+    padding: 0 2px;
+    border-radius: 2px;
+    font-weight: 500;
+  }
+  .regulation-prose {
+    line-height: 1.75;
+    white-space: pre-wrap;
+    font-size: 15px;
+  }
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
