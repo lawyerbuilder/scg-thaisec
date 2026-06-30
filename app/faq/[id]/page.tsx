@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, FileQuestion, Sparkles, AlertCircle, ArrowLeft, ExternalLink } from "lucide-react";
+import { CheckCircle2, FileQuestion, Sparkles, AlertCircle, ArrowLeft, ExternalLink, Clock, UserCheck } from "lucide-react";
 import { getFaqById, type FaqDetail } from "@/lib/faqs";
+import { faqStaleness, FAQ_STALENESS_THRESHOLD_DAYS } from "@/lib/utils";
 import { MarkdownBody } from "@/components/markdown-body";
 import { FaqVerifyControls } from "@/components/faq-verify-controls";
 import { FaqEditForm } from "@/components/faq-edit-form";
@@ -43,13 +44,13 @@ export default async function FaqDetailPage({
             {faq.model}
           </span>
         )}
-        {faq.verifiedAt && (
-          <span className="text-muted-foreground tabular-nums">
-            verified {faq.verifiedAt.slice(0, 10)}
-            {faq.verifiedBy && ` by ${faq.verifiedBy}`}
-          </span>
-        )}
       </div>
+
+      {/* Audit trail — assignment & verification */}
+      <AuditStrip faq={faq} />
+
+      {/* Staleness warning — verified FAQs older than 1 year */}
+      <StalenessBanner verifiedAt={faq.verifiedAt} status={faq.status} />
 
       {/* Question */}
       <h1 className="text-2xl font-semibold tracking-tight leading-snug">
@@ -103,6 +104,65 @@ export default async function FaqDetailPage({
         <p className="eyebrow mb-3">Edit answer</p>
         <FaqEditForm faq={toEditableFaq(faq)} />
       </section>
+    </div>
+  );
+}
+
+function AuditStrip({ faq }: { faq: FaqDetail }) {
+  const hasAnything = faq.assignedTo || faq.verifiedAt || faq.verifiedBy;
+  if (!hasAnything) return null;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-border bg-card px-4 py-2.5 text-[12px]">
+      {faq.assignedTo && faq.status !== "verified" && (
+        <span className="inline-flex items-center gap-1.5 text-sky-700">
+          <UserCheck className="h-3.5 w-3.5" />
+          Assigned to{" "}
+          <Link
+            href={`/faq?assignee=${encodeURIComponent(faq.assignedTo)}`}
+            className="font-medium hover:underline underline-offset-2"
+          >
+            {faq.assignedTo}
+          </Link>
+        </span>
+      )}
+      {faq.verifiedAt && (
+        <span className="inline-flex items-center gap-1.5 text-emerald-700">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Verified{" "}
+          <span className="tabular-nums">{faq.verifiedAt.slice(0, 10)}</span>
+          {faq.verifiedBy && (
+            <>
+              {" "}by <span className="font-medium">{faq.verifiedBy}</span>
+            </>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function StalenessBanner({
+  verifiedAt,
+  status,
+}: {
+  verifiedAt: string | null;
+  status: FaqDetail["status"];
+}) {
+  if (status !== "verified") return null;
+  const s = faqStaleness(verifiedAt);
+  if (s.state !== "stale") return null;
+  return (
+    <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 flex items-start gap-2">
+      <Clock className="h-4 w-4 mt-0.5 shrink-0 text-amber-700" />
+      <div>
+        <p className="font-medium">This answer may be stale</p>
+        <p className="mt-0.5">
+          It was verified {s.ageDays} days ago — over the{" "}
+          {FAQ_STALENESS_THRESHOLD_DAYS}-day freshness threshold. Thai SEC
+          regulations may have changed since. A reviewer should re-confirm the
+          answer is still accurate against the latest source playbook.
+        </p>
+      </div>
     </div>
   );
 }

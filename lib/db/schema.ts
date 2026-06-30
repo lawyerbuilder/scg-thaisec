@@ -102,6 +102,7 @@ export const faqs = pgTable(
     model: varchar("model", { length: 64 }),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
     verifiedBy: text("verified_by"),
+    assignedTo: text("assigned_to"),
     topic: varchar("topic", { length: 64 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()

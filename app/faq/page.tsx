@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { listFaqs, listFaqTopics, countFaqs, type FaqListRow } from "@/lib/faqs";
-import { truncate } from "@/lib/utils";
-import { CheckCircle2, FileQuestion, Sparkles, AlertCircle, Search } from "lucide-react";
+import { truncate, faqStaleness } from "@/lib/utils";
+import { CheckCircle2, FileQuestion, Sparkles, AlertCircle, Search, Clock, UserCheck } from "lucide-react";
 import { FaqAskForm } from "@/components/faq-ask-form";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,7 @@ interface SearchParams {
   topic?: string;
   status?: "draft" | "verified" | "rejected" | "all";
   source?: "imported" | "ai_generated" | "manual" | "all";
+  assignee?: string;
 }
 
 export default async function FaqPage({
@@ -23,6 +24,7 @@ export default async function FaqPage({
   const status = params.status ?? "all";
   const source = params.source ?? "all";
   const topic = params.topic ?? "";
+  const assignee = (params.assignee ?? "").trim();
 
   const [faqs, topics, totals] = await Promise.all([
     listFaqs({
@@ -30,6 +32,7 @@ export default async function FaqPage({
       status,
       topic: topic || undefined,
       source,
+      assignedTo: assignee || undefined,
       limit: 100,
     }).catch(() => [] as FaqListRow[]),
     listFaqTopics().catch(() => [] as { topic: string; count: number }[]),
@@ -79,6 +82,22 @@ export default async function FaqPage({
           {topic && <input type="hidden" name="topic" value={topic} />}
         </div>
       </form>
+
+      {/* Active assignee indicator (set via ?assignee=email URL param) */}
+      {assignee && (
+        <div className="mb-3 inline-flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-1.5 text-[12px] text-sky-800">
+          <UserCheck className="h-3.5 w-3.5" />
+          <span>
+            Showing FAQs assigned to <strong>{assignee}</strong>
+          </span>
+          <Link
+            href={buildHref({ ...params, assignee: "" })}
+            className="ml-2 text-sky-700 underline underline-offset-2 hover:no-underline"
+          >
+            clear
+          </Link>
+        </div>
+      )}
 
       {/* Filter chips */}
       <div className="mb-6 flex flex-wrap gap-2 text-[12px]">
@@ -161,6 +180,23 @@ function FaqRow({ faq }: { faq: FaqListRow }) {
                 {faq.topic}
               </span>
             )}
+            {faq.assignedTo && faq.status === "draft" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5">
+                <UserCheck className="h-3 w-3" /> {faq.assignedTo}
+              </span>
+            )}
+            {faq.status === "verified" &&
+              (() => {
+                const s = faqStaleness(faq.verifiedAt);
+                if (s.state === "stale") {
+                  return (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5">
+                      <Clock className="h-3 w-3" /> May be stale ({s.ageDays}d)
+                    </span>
+                  );
+                }
+                return null;
+              })()}
             {faq.regulationPlaybookSlug && (
               <span className="text-muted-foreground tabular-nums">
                 from {faq.regulationPlaybookSlug.replace("pb-", "§ ")}

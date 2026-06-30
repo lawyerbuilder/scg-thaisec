@@ -40,3 +40,31 @@ export function formatDate(value: Date | string | null | undefined, locale: "en"
 export function containsThai(s: string): boolean {
   return /[฀-๿]/.test(s);
 }
+
+/**
+ * FAQs lose accuracy as the underlying regulations evolve. Verified content
+ * older than this threshold gets a "may be stale" warning on the UI so users
+ * don't blindly trust a 3-year-old answer.
+ */
+export const FAQ_STALENESS_THRESHOLD_DAYS = 365;
+
+/**
+ * Returns the staleness state for an FAQ:
+ *   - "fresh"   verified within the threshold
+ *   - "stale"   verified but past the threshold — show warning
+ *   - "unverified"  never verified (no verified_at)
+ */
+export function faqStaleness(
+  verifiedAt: string | null | undefined,
+  now: Date = new Date()
+): { state: "fresh" | "stale" | "unverified"; ageDays: number | null } {
+  if (!verifiedAt) return { state: "unverified", ageDays: null };
+  const verified = new Date(verifiedAt);
+  if (Number.isNaN(verified.getTime())) return { state: "unverified", ageDays: null };
+  const ageMs = now.getTime() - verified.getTime();
+  const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+  return {
+    state: ageDays > FAQ_STALENESS_THRESHOLD_DAYS ? "stale" : "fresh",
+    ageDays,
+  };
+}

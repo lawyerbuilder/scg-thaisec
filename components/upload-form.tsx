@@ -21,6 +21,7 @@ export function UploadForm() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
   const [skipFaqs, setSkipFaqs] = useState(false);
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<UploadResponse | null>(null);
@@ -43,6 +44,7 @@ export function UploadForm() {
     const formData = new FormData();
     formData.append("file", file);
     if (title.trim()) formData.append("title", title.trim());
+    if (assignedTo.trim()) formData.append("assignedTo", assignedTo.trim());
     if (skipFaqs) formData.append("skipFaqs", "true");
 
     try {
@@ -110,6 +112,24 @@ export function UploadForm() {
           placeholder="e.g. AGM Quorum Requirements Update 2025"
           className="w-full h-10 px-3 rounded-md border border-border bg-card text-[14px]"
         />
+      </label>
+
+      {/* Assign to a lawyer for verification */}
+      <label className="block">
+        <span className="eyebrow text-[10px] mb-1.5 block">
+          Assign FAQs to (lawyer email — optional)
+        </span>
+        <input
+          type="email"
+          value={assignedTo}
+          onChange={(e) => setAssignedTo(e.target.value)}
+          placeholder="e.g. somchai@scg.com — they'll see it as their queue on /faq"
+          className="w-full h-10 px-3 rounded-md border border-border bg-card text-[14px]"
+        />
+        <span className="mt-1 block text-[11px] text-muted-foreground">
+          The generated draft FAQs land in that person&apos;s verification queue.
+          Leave blank to leave them unassigned.
+        </span>
       </label>
 
       <label className="flex items-center gap-2 text-[13px] text-muted-foreground">

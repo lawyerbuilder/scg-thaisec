@@ -20,6 +20,11 @@ export interface SourceForGeneration {
   titleEn: string | null;
   bodyTh: string | null;
   bodyEn: string | null;
+  /**
+   * Optional: email of the lawyer to assign these draft FAQs to for verification.
+   * Surfaced on the FAQ list/detail and used by the "assigned to me" filter.
+   */
+  assignedTo?: string | null;
 }
 
 export interface GeneratedFaqRecord {
@@ -136,12 +141,13 @@ export async function generateAndSaveFaqs(
     throw new Error("malformed response: missing 'faqs' array");
   }
 
+  const assignedTo = src.assignedTo?.trim() || null;
   const faqIds: number[] = [];
   for (const f of parsed.faqs) {
     const result = await db.execute<{ id: number }>(sql`
       INSERT INTO faqs (
         question_th, question_en, answer_th, answer_en,
-        regulation_id, source, status, model, topic
+        regulation_id, source, status, model, topic, assigned_to
       ) VALUES (
         ${f.question_th},
         ${f.question_en},
@@ -151,7 +157,8 @@ export async function generateAndSaveFaqs(
         'ai_generated',
         'draft',
         ${MODEL},
-        ${f.topic}
+        ${f.topic},
+        ${assignedTo}
       )
       RETURNING id
     `);

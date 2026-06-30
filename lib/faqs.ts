@@ -21,6 +21,7 @@ export interface FaqListRow {
   regulationPlaybookSlug: string | null;
   verifiedAt: string | null;
   verifiedBy: string | null;
+  assignedTo: string | null;
   rank: number;
 }
 
@@ -35,6 +36,7 @@ export interface FaqListOptions {
   status?: "draft" | "verified" | "rejected" | "all";
   topic?: string;
   source?: "imported" | "ai_generated" | "manual" | "all";
+  assignedTo?: string;
   limit?: number;
   offset?: number;
 }
@@ -42,11 +44,20 @@ export interface FaqListOptions {
 const DEFAULT_LIMIT = 50;
 
 export async function listFaqs(opts: FaqListOptions = {}): Promise<FaqListRow[]> {
-  const { query, status = "all", topic, source = "all", limit = DEFAULT_LIMIT, offset = 0 } = opts;
+  const {
+    query,
+    status = "all",
+    topic,
+    source = "all",
+    assignedTo,
+    limit = DEFAULT_LIMIT,
+    offset = 0,
+  } = opts;
 
   const statusFilter = status === "all" ? sql`` : sql`AND f.status = ${status}`;
   const topicFilter = topic ? sql`AND f.topic = ${topic}` : sql``;
   const sourceFilter = source === "all" ? sql`` : sql`AND f.source = ${source}`;
+  const assigneeFilter = assignedTo ? sql`AND f.assigned_to = ${assignedTo}` : sql``;
 
   let searchClause = sql``;
   let rankExpr = sql`0::real`;
@@ -85,6 +96,7 @@ export async function listFaqs(opts: FaqListOptions = {}): Promise<FaqListRow[]>
       r.playbook_slug AS "regulationPlaybookSlug",
       to_char(f.verified_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "verifiedAt",
       f.verified_by AS "verifiedBy",
+      f.assigned_to AS "assignedTo",
       (${rankExpr})::real AS rank
     FROM faqs f
     LEFT JOIN regulations r ON r.id = f.regulation_id
@@ -92,6 +104,7 @@ export async function listFaqs(opts: FaqListOptions = {}): Promise<FaqListRow[]>
       ${statusFilter}
       ${topicFilter}
       ${sourceFilter}
+      ${assigneeFilter}
       ${searchClause}
     ORDER BY
       CASE f.status WHEN 'verified' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
@@ -121,6 +134,7 @@ export async function getFaqById(id: number): Promise<FaqDetail | null> {
       r.playbook_slug AS "regulationPlaybookSlug",
       to_char(f.verified_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "verifiedAt",
       f.verified_by AS "verifiedBy",
+      f.assigned_to AS "assignedTo",
       to_char(f.created_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "createdAt",
       to_char(f.updated_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "updatedAt",
       0::real AS rank

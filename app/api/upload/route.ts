@@ -46,6 +46,7 @@ export async function POST(req: Request) {
 
   const titleOverride = (formData.get("title") as string | null)?.trim() ?? "";
   const skipFaqGen = formData.get("skipFaqs") === "true";
+  const assignedTo = (formData.get("assignedTo") as string | null)?.trim() || null;
 
   // 1. Extract text
   let extracted;
@@ -119,6 +120,7 @@ export async function POST(req: Request) {
         titleEn: looksThai ? null : title,
         bodyTh,
         bodyEn,
+        assignedTo,
       });
     } catch (err) {
       faqError = (err as Error).message;
