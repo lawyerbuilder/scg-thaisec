@@ -74,6 +74,39 @@ export interface FaqEditPayload {
   topic: string;
 }
 
+/**
+ * Bulk verify N FAQs in one call. Used by /faq list checkboxes. Same
+ * auth stub as the single-row action — applies to ALL ids. Returns the
+ * count actually flipped (was draft → verified). Already-verified rows
+ * are no-ops.
+ */
+export async function bulkVerifyFaqsAction(faqIds: number[]): Promise<{ verified: number }> {
+  const email = await getVerifierEmail();
+  if (!Array.isArray(faqIds) || faqIds.length === 0) return { verified: 0 };
+  let verified = 0;
+  for (const id of faqIds) {
+    const updated = await verifyFaq(id, email);
+    if (updated && updated.status === "verified") verified += 1;
+  }
+  revalidatePath("/faq");
+  return { verified };
+}
+
+/**
+ * Bulk reject N FAQs.
+ */
+export async function bulkRejectFaqsAction(faqIds: number[]): Promise<{ rejected: number }> {
+  const email = await getVerifierEmail();
+  if (!Array.isArray(faqIds) || faqIds.length === 0) return { rejected: 0 };
+  let rejected = 0;
+  for (const id of faqIds) {
+    const updated = await rejectFaq(id, email);
+    if (updated && updated.status === "rejected") rejected += 1;
+  }
+  revalidatePath("/faq");
+  return { rejected };
+}
+
 export async function updateFaqAction(
   faqId: number,
   payload: FaqEditPayload

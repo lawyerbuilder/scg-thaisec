@@ -5,6 +5,11 @@ import { CheckCircle2, FileQuestion, Sparkles, AlertCircle, Search, Clock, UserC
 import { FaqAskForm } from "@/components/faq-ask-form";
 import { LocalizedText } from "@/components/localized-text";
 import { LocalizedTruncated } from "@/components/localized-truncated";
+import {
+  FaqSelectionProvider,
+  FaqRowCheckbox,
+  FaqBulkActionBar,
+} from "@/components/faq-bulk-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -129,15 +134,18 @@ export default async function FaqPage({
         ))}
       </div>
 
-      {/* Results */}
+      {/* Results — wrapped in SelectionProvider so checkboxes share state */}
       {faqs.length === 0 ? (
         <EmptyState query={query} hasAnyData={totals.all > 0} />
       ) : (
-        <div className="space-y-3">
-          {faqs.map((f) => (
-            <FaqRow key={f.id} faq={f} />
-          ))}
-        </div>
+        <FaqSelectionProvider>
+          <div className="space-y-3 pb-32">
+            {faqs.map((f) => (
+              <FaqRow key={f.id} faq={f} />
+            ))}
+          </div>
+          <FaqBulkActionBar allIds={faqs.map((f) => f.id)} />
+        </FaqSelectionProvider>
       )}
     </div>
   );
@@ -173,6 +181,9 @@ function FaqRow({ faq }: { faq: FaqListRow }) {
       className="block surface surface-hover p-5 transition-colors"
     >
       <div className="flex items-start gap-3">
+        <div className="pt-0.5">
+          <FaqRowCheckbox id={faq.id} />
+        </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1.5 text-[11px]">
             <StatusBadge status={faq.status} />

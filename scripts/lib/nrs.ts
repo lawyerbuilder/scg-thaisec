@@ -127,6 +127,14 @@ export async function fetchRefIdBucket(refId: number): Promise<ScrapedRow[]> {
     const title = cells.find((c) => c && c.length > 12) ?? cells[1] ?? "";
     if (!title) return;
 
+    // Skip header rows that bleed in via cheerio. NRS table headers contain
+    // the column labels ('ประเภท', 'เรื่อง', 'มาตรา', 'สถานะ', 'วันที่ลงนาม',
+    // 'วันที่มีผลใช้บังคับ') joined into one big string. If the title contains
+    // 3+ of these labels OR a literal newline-separated header dump, skip it.
+    const headerLabels = ["ประเภท", "เรื่อง", "มาตรา", "ดูเอกสาร", "สถานะ", "วันที่ลงนาม", "วันที่มีผลใช้บังคับ"];
+    const hits = headerLabels.filter((l) => title.includes(l)).length;
+    if (hits >= 3) return;
+
     const documentType = cells.find((c) =>
       /(notification|ประกาศ|royal|act|พระราช|กฎกระทรวง|guideline|แนวปฏิบัติ)/i.test(c)
     ) ?? null;

@@ -4,8 +4,11 @@ import { Scale } from "lucide-react";
 import { SearchBar } from "./search-bar";
 import { NavFavoritesLink } from "./nav-favorites-link";
 import { LocaleToggle } from "./locale-toggle";
+import { countFaqs } from "@/lib/faqs";
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  // Lightweight count for the nav badge — fails silently if DB is unreachable
+  const draftCount = await countFaqs({ status: "draft" }).catch(() => 0);
   return (
     <>
       {/* Thin authoritative red strip — the "official" signal */}
@@ -35,8 +38,19 @@ export function SiteHeader() {
             <Link href="/regulations" className="hover:text-foreground transition-colors">
               Regulations
             </Link>
-            <Link href="/faq" className="hover:text-foreground transition-colors">
+            <Link
+              href="/faq"
+              className="hover:text-foreground transition-colors inline-flex items-center gap-1.5"
+            >
               FAQ
+              {draftCount > 0 && (
+                <span
+                  className="inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-900 border border-amber-300 px-1.5 min-w-[18px] h-[18px] text-[10px] font-semibold tabular-nums"
+                  title={`${draftCount} draft FAQ${draftCount === 1 ? "" : "s"} awaiting review`}
+                >
+                  {draftCount > 99 ? "99+" : draftCount}
+                </span>
+              )}
             </Link>
             <Link href="/upload" className="hover:text-foreground transition-colors">
               FAQ generator
