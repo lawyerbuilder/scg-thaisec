@@ -25,19 +25,33 @@ import fs from "node:fs";
 import path from "node:path";
 import { sql } from "drizzle-orm";
 import Groq from "groq-sdk";
+import mammoth from "mammoth";
 import { db } from "@/lib/db";
-import { parseQaDocx, type ParsedQA } from "@/lib/parse-qa-docx";
+import { extractQaFromText, type ExtractedQA } from "@/lib/extract-qa-llm";
 import { storeFaqEmbedding, faqEmbeddingText } from "@/lib/embeddings";
 
 interface FileMapping {
   filename: string;
   topicPrefix: string;
+  topicHint: string;
 }
 
 const FILES: FileMapping[] = [
-  { filename: "QA_Legal_AGM.docx", topicPrefix: "agm" },
-  { filename: "QA_Legal_Litigation.docx", topicPrefix: "litigation" },
-  { filename: "QA_Legal_PDPA.docx", topicPrefix: "pdpa" },
+  {
+    filename: "QA_Legal_AGM.docx",
+    topicPrefix: "agm",
+    topicHint: "Annual General Meeting procedures, proxy, voting, annual reports",
+  },
+  {
+    filename: "QA_Legal_Litigation.docx",
+    topicPrefix: "litigation",
+    topicHint: "Active and historical lawsuits, judgments, settlements, insurance",
+  },
+  {
+    filename: "QA_Legal_PDPA.docx",
+    topicPrefix: "pdpa",
+    topicHint: "Personal Data Protection Act compliance, data-subject rights, DPO",
+  },
 ];
 
 const TRANSLATION_MODEL = "openai/gpt-oss-20b";
@@ -106,25 +120,44 @@ async function alreadyImported(questionTh: string): Promise<boolean> {
   return rows.rows.length > 0;
 }
 
+// Updated to use ExtractedQA shape (section instead of topic)
+type ParsedQA = {
+  topic: string | null;
+  questionTh: string;
+  answerTh: string;
+};
+
+function fromExtracted(qa: ExtractedQA): ParsedQA {
+  return { topic: qa.section, questionTh: qa.question, answerTh: qa.answer };
+}
+
 async function loadOneFile(
   folder: string,
   mapping: FileMapping,
   groq: Groq | null
-): Promise<{ inserted: number; skipped: number; failed: number }> {
+): Promise<{ inserted: number; skipped: number; failed: number; rejectedHallucination: number }> {
   const filePath = path.join(folder, mapping.filename);
   if (!fs.existsSync(filePath)) {
     console.warn(`[load-faqs] missing: ${filePath}`);
-    return { inserted: 0, skipped: 0, failed: 0 };
+    return { inserted: 0, skipped: 0, failed: 0, rejectedHallucination: 0 };
   }
-  console.log(`[load-faqs] parsing ${mapping.filename}…`);
-  const qas: ParsedQA[] = await parseQaDocx(filePath);
-  console.log(`[load-faqs]   ${qas.length} Q&A pairs extracted`);
+  console.log(`[load-faqs] extracting Q&A from ${mapping.filename} via LLM…`);
+  const buf = fs.readFileSync(filePath);
+  const { value: text } = await mammoth.extractRawText({ buffer: buf });
+  const { pairs: qas, rejectedHallucination } = await extractQaFromText(
+    text,
+    mapping.topicHint
+  );
+  console.log(
+    `[load-faqs]   ${qas.length} Q&A pairs extracted (+ ${rejectedHallucination} hallucinations rejected)`
+  );
 
   let inserted = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const [i, qa] of qas.entries()) {
+  for (const [i, raw] of qas.entries()) {
+    const qa = fromExtracted(raw);
     const tag = `[${i + 1}/${qas.length}]`;
 
     if (await alreadyImported(qa.questionTh)) {
@@ -186,7 +219,7 @@ async function loadOneFile(
     }
   }
 
-  return { inserted, skipped, failed };
+  return { inserted, skipped, failed, rejectedHallucination };
 }
 
 function slugifyTopic(topic: string): string {
@@ -224,16 +257,24 @@ async function main() {
     );
   }
 
-  const totals = { inserted: 0, skipped: 0, failed: 0 };
+  const totals = { inserted: 0, skipped: 0, failed: 0, rejectedHallucination: 0 };
   for (const mapping of FILES) {
-    const r = await loadOneFile(folder, mapping, groq);
-    totals.inserted += r.inserted;
-    totals.skipped += r.skipped;
-    totals.failed += r.failed;
+    try {
+      const r = await loadOneFile(folder, mapping, groq);
+      totals.inserted += r.inserted;
+      totals.skipped += r.skipped;
+      totals.failed += r.failed;
+      totals.rejectedHallucination += r.rejectedHallucination;
+    } catch (err) {
+      console.error(
+        `[load-faqs] ${mapping.filename} failed: ${(err as Error).message}`
+      );
+      // Continue to the next file rather than crashing the whole import
+    }
   }
 
   console.log(
-    `\n[load-faqs] DONE — ${totals.inserted} inserted, ${totals.skipped} skipped (already imported), ${totals.failed} failed`
+    `\n[load-faqs] DONE — ${totals.inserted} inserted, ${totals.skipped} skipped, ${totals.failed} failed, ${totals.rejectedHallucination} hallucinations rejected`
   );
 }
 
