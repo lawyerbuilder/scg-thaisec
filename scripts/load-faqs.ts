@@ -1,46 +1,245 @@
 /**
- * Loads pre-written Q&A from the SCG AGM playbook (Section 4) into the `faqs`
- * table as status='verified', source='imported'.
+ * Loads SCG Legal's Section-4 Q&A documents into the `faqs` table as
+ * status='verified', source='imported'. SCG Legal authored these, so they
+ * skip the AI-generated/draft cycle and land as authoritative.
  *
- * Awaiting `.docx` versions of the three legacy `.doc` files. Once provided,
- * the actual Q&A parser goes here.
+ * Expects three .docx files in the folder you pass:
+ *   - QA_Legal_AGM.docx        → topic prefix 'agm'
+ *   - QA_Legal_Litigation.docx → topic prefix 'litigation'
+ *   - QA_Legal_PDPA.docx       → topic prefix 'pdpa'
+ *
+ * For each parsed Q&A the script also calls Groq to translate to English so
+ * the FAQ shows bilingually. Translation is best-effort — on failure the
+ * English fields stay empty and the Thai is still saved (UI handles missing
+ * English fine).
  *
  * Usage:
- *   npm run load:faqs -- "<path-to-folder-containing-QA-docx-files>"
+ *   npm run load:faqs -- <path-to-folder-containing-docx>
+ *   npm run load:faqs -- "C:\Users\abigails\AppData\Local\Temp\agm-docx"
+ *
+ * Re-runs are SAFE — dedups by (questionTh hash) per file: if an FAQ with
+ * the same question text already exists from 'imported' source, it's skipped.
  */
 
 import fs from "node:fs";
 import path from "node:path";
+import { sql } from "drizzle-orm";
+import Groq from "groq-sdk";
+import { db } from "@/lib/db";
+import { parseQaDocx, type ParsedQA } from "@/lib/parse-qa-docx";
+import { storeFaqEmbedding, faqEmbeddingText } from "@/lib/embeddings";
 
-const args = process.argv.slice(2);
-const folder = args[0];
-
-if (!folder) {
-  console.error(
-    "[load-faqs] missing path arg.\n" +
-      "Usage: npm run load:faqs -- <path-to-docx-folder>\n\n" +
-      "Expected files in that folder:\n" +
-      "  - QA_Legal_AGM.docx\n" +
-      "  - QA_Legal_Litigation.docx\n" +
-      "  - QA_Legal_PDPA.docx"
-  );
-  process.exit(1);
+interface FileMapping {
+  filename: string;
+  topicPrefix: string;
 }
 
-const expected = ["QA_Legal_AGM.docx", "QA_Legal_Litigation.docx", "QA_Legal_PDPA.docx"];
-const missing = expected.filter((f) => !fs.existsSync(path.join(folder, f)));
+const FILES: FileMapping[] = [
+  { filename: "QA_Legal_AGM.docx", topicPrefix: "agm" },
+  { filename: "QA_Legal_Litigation.docx", topicPrefix: "litigation" },
+  { filename: "QA_Legal_PDPA.docx", topicPrefix: "pdpa" },
+];
 
-if (missing.length > 0) {
-  console.error(
-    `[load-faqs] missing ${missing.length} file(s) in ${folder}:\n  ${missing.join("\n  ")}\n\n` +
-      "Convert the .doc files in Word (File → Save As → .docx) and place them here."
-  );
-  process.exit(1);
+const TRANSLATION_MODEL = "openai/gpt-oss-20b";
+const TRANSLATION_DELAY_MS = 800;
+
+const TRANSLATION_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    question_en: {
+      type: "string",
+      description: "Faithful English translation of the Thai question. Preserve legal terms and any cited section numbers (e.g. มาตรา 103 → Section 103).",
+    },
+    answer_en: {
+      type: "string",
+      description: "Faithful English translation of the Thai answer. Keep the same structure and substance.",
+    },
+  },
+  required: ["question_en", "answer_en"],
+} as const;
+
+async function translateQa(
+  groq: Groq,
+  questionTh: string,
+  answerTh: string
+): Promise<{ questionEn: string; answerEn: string } | null> {
+  try {
+    const response = await groq.chat.completions.create({
+      model: TRANSLATION_MODEL,
+      messages: [
+        {
+          role: "user",
+          content: `Translate this Thai legal Q&A pair to English. Stay faithful — don't summarize, don't add commentary. Preserve legal precision and any cited section numbers.
+
+Question (Thai): ${questionTh}
+
+Answer (Thai): ${answerTh}
+
+Return JSON with question_en and answer_en.`,
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "qa_translation", schema: TRANSLATION_SCHEMA, strict: true },
+      },
+      temperature: 0.1,
+      max_tokens: 2000,
+    });
+    const content = response.choices[0]?.message?.content;
+    if (!content) return null;
+    const parsed = JSON.parse(content) as { question_en: string; answer_en: string };
+    if (!parsed.question_en || !parsed.answer_en) return null;
+    return { questionEn: parsed.question_en, answerEn: parsed.answer_en };
+  } catch (err) {
+    console.warn(`[load-faqs] translation failed: ${(err as Error).message}`);
+    return null;
+  }
 }
 
-console.log(
-  "[load-faqs] found all 3 .docx files. The Q&A parser is not implemented yet — " +
-    "share the file contents with Claude so the parsing logic can be tailored to " +
-    "the actual structure (numbered list? table? Q:/A: prefixes?)."
-);
-process.exit(0);
+async function alreadyImported(questionTh: string): Promise<boolean> {
+  const rows = await db.execute<{ id: number }>(sql`
+    SELECT id FROM faqs
+    WHERE source = 'imported' AND question_th = ${questionTh}
+    LIMIT 1
+  `);
+  return rows.rows.length > 0;
+}
+
+async function loadOneFile(
+  folder: string,
+  mapping: FileMapping,
+  groq: Groq | null
+): Promise<{ inserted: number; skipped: number; failed: number }> {
+  const filePath = path.join(folder, mapping.filename);
+  if (!fs.existsSync(filePath)) {
+    console.warn(`[load-faqs] missing: ${filePath}`);
+    return { inserted: 0, skipped: 0, failed: 0 };
+  }
+  console.log(`[load-faqs] parsing ${mapping.filename}…`);
+  const qas: ParsedQA[] = await parseQaDocx(filePath);
+  console.log(`[load-faqs]   ${qas.length} Q&A pairs extracted`);
+
+  let inserted = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const [i, qa] of qas.entries()) {
+    const tag = `[${i + 1}/${qas.length}]`;
+
+    if (await alreadyImported(qa.questionTh)) {
+      skipped += 1;
+      console.log(`  ${tag} ↩ already imported: ${qa.questionTh.slice(0, 60)}…`);
+      continue;
+    }
+
+    // Optional translation
+    let translation: { questionEn: string; answerEn: string } | null = null;
+    if (groq) {
+      translation = await translateQa(groq, qa.questionTh, qa.answerTh);
+      await sleep(TRANSLATION_DELAY_MS);
+    }
+
+    const topic = qa.topic
+      ? `${mapping.topicPrefix}/${slugifyTopic(qa.topic)}`
+      : mapping.topicPrefix;
+
+    try {
+      const result = await db.execute<{ id: number }>(sql`
+        INSERT INTO faqs (
+          question_th, question_en, answer_th, answer_en,
+          source, status, topic,
+          verified_at, verified_by
+        ) VALUES (
+          ${qa.questionTh},
+          ${translation?.questionEn ?? null},
+          ${qa.answerTh},
+          ${translation?.answerEn ?? null},
+          'imported',
+          'verified',
+          ${topic},
+          now(),
+          'scg-legal-import'
+        )
+        RETURNING id
+      `);
+      const id = result.rows[0]?.id;
+      if (id) {
+        inserted += 1;
+        console.log(`  ${tag} ✓ inserted id=${id} (${topic})`);
+        // Best-effort embed
+        await storeFaqEmbedding(
+          id,
+          faqEmbeddingText({
+            questionTh: qa.questionTh,
+            questionEn: translation?.questionEn ?? null,
+            answerTh: qa.answerTh,
+            answerEn: translation?.answerEn ?? null,
+          })
+        );
+      } else {
+        failed += 1;
+      }
+    } catch (err) {
+      failed += 1;
+      console.warn(`  ${tag} ✗ insert failed: ${(err as Error).message}`);
+    }
+  }
+
+  return { inserted, skipped, failed };
+}
+
+function slugifyTopic(topic: string): string {
+  return topic
+    .toLowerCase()
+    .replace(/[^\w฀-๿]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function main() {
+  const folder = process.argv[2];
+  if (!folder) {
+    console.error(
+      "usage: npm run load:faqs -- <path-to-folder>\n" +
+        "Folder must contain QA_Legal_AGM.docx, QA_Legal_Litigation.docx, QA_Legal_PDPA.docx"
+    );
+    process.exit(1);
+  }
+  if (!fs.existsSync(folder)) {
+    console.error(`folder not found: ${folder}`);
+    process.exit(1);
+  }
+
+  // Translation is optional but strongly recommended
+  const groqKey = process.env.GROQ_API_KEY;
+  const groq = groqKey ? new Groq({ apiKey: groqKey }) : null;
+  if (!groq) {
+    console.warn(
+      "[load-faqs] GROQ_API_KEY not set — FAQs will be loaded Thai-only (no English translations)."
+    );
+  }
+
+  const totals = { inserted: 0, skipped: 0, failed: 0 };
+  for (const mapping of FILES) {
+    const r = await loadOneFile(folder, mapping, groq);
+    totals.inserted += r.inserted;
+    totals.skipped += r.skipped;
+    totals.failed += r.failed;
+  }
+
+  console.log(
+    `\n[load-faqs] DONE — ${totals.inserted} inserted, ${totals.skipped} skipped (already imported), ${totals.failed} failed`
+  );
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error("[load-faqs] fatal:", err);
+    process.exit(1);
+  });
