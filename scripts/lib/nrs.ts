@@ -116,12 +116,24 @@ export async function fetchRefIdBucket(refId: number): Promise<ScrapedRow[]> {
     const cells = $tr.find("td").toArray().map((c) => $(c).text().trim());
     if (cells.length < 3) return;
 
+    // Collect ALL hrefs in this row so we can extract REAL URLs (not synthesize).
+    // SEC NRS stores some docs as .doc, others as .docx, some are signed-only
+    // (no text-layer p_r.pdf). Hardcoding patterns leads to 404s — use what's
+    // actually in the HTML.
+    const allHrefs = $tr
+      .find("a[href]")
+      .map((_, a) => $(a).attr("href") ?? "")
+      .get()
+      .filter((h) => h && !h.startsWith("javascript:"));
+
     let docId: number | null = null;
-    $tr.find("a[href]").each((_, a) => {
-      if (docId !== null) return;
-      const id = extractDocId($(a).attr("href"));
-      if (id !== null) docId = id;
-    });
+    for (const href of allHrefs) {
+      const id = extractDocId(href);
+      if (id !== null) {
+        docId = id;
+        break;
+      }
+    }
     if (docId === null) return;
 
     const title = cells.find((c) => c && c.length > 12) ?? cells[1] ?? "";
@@ -134,6 +146,19 @@ export async function fetchRefIdBucket(refId: number): Promise<ScrapedRow[]> {
     const headerLabels = ["ประเภท", "เรื่อง", "มาตรา", "ดูเอกสาร", "สถานะ", "วันที่ลงนาม", "วันที่มีผลใช้บังคับ"];
     const hits = headerLabels.filter((l) => title.includes(l)).length;
     if (hits >= 3) return;
+
+    // Pick the real URLs for this doc_id from the row's hrefs.
+    // Patterns: <id>s.pdf = signed scan, <id>p_r.pdf = text-layer,
+    // <id>p.doc(x?) = editable. Multiple variants may exist; pick the first.
+    const docIdStr = String(docId);
+    const matchingHrefs = allHrefs.filter((h) => extractDocId(h) === docId);
+    const pdfUrl =
+      matchingHrefs.find((h) => h.endsWith(`${docIdStr}s.pdf`)) ?? null;
+    const pdfTextUrl =
+      matchingHrefs.find((h) => h.endsWith(`${docIdStr}p_r.pdf`)) ?? null;
+    const docUrl =
+      matchingHrefs.find((h) => /\d+p\.docx?$/i.test(h) && extractDocId(h) === docId) ??
+      null;
 
     const documentType = cells.find((c) =>
       /(notification|ประกาศ|royal|act|พระราช|กฎกระทรวง|guideline|แนวปฏิบัติ)/i.test(c)
@@ -153,9 +178,12 @@ export async function fetchRefIdBucket(refId: number): Promise<ScrapedRow[]> {
       publicationDate,
       effectiveDate,
       status: classifyStatus(statusCell),
-      pdfUrl: `${PDF_BASE}/${docId}s.pdf`,
-      pdfTextUrl: `${PDF_BASE}/${docId}p_r.pdf`,
-      docUrl: `${PDF_BASE}/${docId}p.doc`,
+      // Real URLs scraped from the page — fall back to the legacy template
+      // only as a last resort so we don't degrade behavior for rows that
+      // happen to follow the template
+      pdfUrl: pdfUrl ?? `${PDF_BASE}/${docId}s.pdf`,
+      pdfTextUrl: pdfTextUrl ?? `${PDF_BASE}/${docId}p_r.pdf`,
+      docUrl: docUrl ?? `${PDF_BASE}/${docId}p.doc`,
       sourceUrl,
       regNumber: extractRegNumber(title),
     });

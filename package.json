@@ -23,7 +23,8 @@
     "inspect:row": "tsx --env-file=.env.local scripts/inspect-row.ts",
     "backfill:embeddings": "tsx --env-file=.env.local scripts/backfill-embeddings.ts",
     "inspect:docx": "tsx scripts/inspect-docx.ts",
-    "backfill:translations": "tsx --env-file=.env.local scripts/backfill-translations.ts"
+    "backfill:translations": "tsx --env-file=.env.local scripts/backfill-translations.ts",
+    "repair:sec-urls": "tsx --env-file=.env.local scripts/repair-sec-urls.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",

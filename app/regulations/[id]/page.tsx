@@ -141,10 +141,15 @@ export default async function RegulationDetailPage({
           )}
         </div>
 
-        {hasAnyBody && (
+        {hasAnyBody ? (
           <div className="mt-10">
             <LocalizedBody bodyEn={bodyEn} bodyTh={bodyTh} />
           </div>
+        ) : (
+          <EmptyBodyState
+            hasAnyUrl={!!reg.pdfUrl || !!reg.pdfTextUrl || !!reg.docUrl}
+            sourceType={reg.regulationTypeSlug}
+          />
         )}
       </article>
 
@@ -162,5 +167,46 @@ export default async function RegulationDetailPage({
         </section>
       )}
     </div>
+  );
+}
+
+function EmptyBodyState({
+  hasAnyUrl,
+  sourceType,
+}: {
+  hasAnyUrl: boolean;
+  sourceType: string | null;
+}) {
+  return (
+    <section className="mt-10 surface p-6 sm:p-8 text-sm">
+      <p className="eyebrow mb-2">Source content</p>
+      {hasAnyUrl ? (
+        <>
+          <p className="text-foreground/85 leading-relaxed">
+            We don&apos;t have an extracted text version of this document yet.
+            The source files linked above are scanned PDFs (image-only) — text
+            extraction requires OCR.
+          </p>
+          <p className="mt-2 text-[12px] text-muted-foreground">
+            Open the linked PDF directly to read the official version. OCR
+            ingestion is a planned next phase.
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="text-foreground/85 leading-relaxed">
+            The original document files are no longer accessible from the SEC&apos;s
+            servers. We&apos;ve kept the metadata (title, category, dates) as a
+            reference but cannot display the text.
+          </p>
+          <p className="mt-2 text-[12px] text-muted-foreground">
+            Visit the Source link above to search for the current version on
+            capital.sec.or.th.
+            {sourceType === "agm-playbook" &&
+              " (Or this may be a navigation parent — content lives in its child sections.)"}
+          </p>
+        </>
+      )}
+    </section>
   );
 }
