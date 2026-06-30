@@ -37,6 +37,13 @@ interface AskResponse {
   } | null;
   confidence: "high" | "medium" | "low";
   reasoning: string;
+  topFaqCandidates: {
+    id: number;
+    questionTh: string;
+    questionEn: string | null;
+    status: string;
+    topic: string | null;
+  }[];
 }
 
 export function FaqAskForm() {
@@ -198,13 +205,70 @@ function ResultPanel({
         )
       ) : (
         <div className="text-sm text-foreground/80">
-          <p>No matching FAQ or playbook content found for your question.</p>
+          <p className="font-medium">No direct answer — but here are FAQs that came up in the search:</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            The AI didn&apos;t confidently match any of these to your question.
+            Skim them anyway — the model may have missed a close synonym.
+          </p>
         </div>
+      )}
+
+      {/* Always-on candidate list — useful when the AI was wrong or unsure */}
+      {result.topFaqCandidates.length > 0 && matchType !== "verified_faq" && (
+        <CandidatesFallback candidates={result.topFaqCandidates} />
       )}
 
       <p className="mt-4 text-[11px] text-muted-foreground italic">
         AI reasoning: {reasoning}
       </p>
+    </div>
+  );
+}
+
+function CandidatesFallback({
+  candidates,
+}: {
+  candidates: AskResponse["topFaqCandidates"];
+}) {
+  return (
+    <div className="mt-4 pt-4 border-t border-violet-200/70">
+      <p className="eyebrow text-[10px] mb-2 text-violet-700">
+        FAQs retrieved by search (top {candidates.length})
+      </p>
+      <ul className="space-y-1.5">
+        {candidates.map((c) => (
+          <li key={c.id}>
+            <Link
+              href={`/faq/${c.id}`}
+              className="flex items-start gap-2 rounded-md border border-border bg-card hover:border-foreground/30 px-3 py-2 text-[12px] transition-colors"
+            >
+              <FileQuestion className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+              <span className="flex-1 min-w-0">
+                <span className="block font-medium leading-snug">
+                  {c.questionEn ?? c.questionTh}
+                </span>
+                {c.questionEn && (
+                  <span className="block text-[11px] text-muted-foreground mt-0.5 lang-th line-clamp-1">
+                    {c.questionTh}
+                  </span>
+                )}
+              </span>
+              <span className="shrink-0 flex items-center gap-1">
+                {c.status === "verified" ? (
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                    Verified
+                  </span>
+                ) : c.status === "draft" ? (
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                    Draft
+                  </span>
+                ) : null}
+                <ExternalLink className="h-3 w-3 text-muted-foreground" />
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -18,6 +18,7 @@ interface Response {
   citations: Citation[];
   confidence: "high" | "medium" | "low";
   reasoning: string;
+  topCandidates: Citation[];
 }
 
 export function RegulationAskForm() {
@@ -154,6 +155,45 @@ function ResultPanel({
           <p>{result.answer}</p>
         </div>
       )}
+
+      {/* Always-on candidate fallback. Hides if hasAnswer cited them already. */}
+      {result.topCandidates.length > 0 &&
+        !(
+          result.hasAnswer &&
+          result.citations.length > 0 &&
+          result.topCandidates.every((tc) =>
+            result.citations.some((c) => c.id === tc.id)
+          )
+        ) && (
+          <div className="mt-4 pt-4 border-t border-violet-200/70">
+            <p className="eyebrow text-[10px] mb-2 text-violet-700">
+              Regulations retrieved by search (top {result.topCandidates.length})
+            </p>
+            <ul className="space-y-1.5">
+              {result.topCandidates.map((c) => (
+                <li key={c.id}>
+                  <Link
+                    href={`/regulations/${c.id}`}
+                    className="flex items-baseline gap-1.5 rounded-md border border-border bg-card hover:border-foreground/30 px-3 py-2 text-[12px] transition-colors"
+                  >
+                    {c.regulationTypeName && (
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                        {c.regulationTypeName}
+                      </span>
+                    )}
+                    {c.regNumber && (
+                      <span className="font-medium tabular-nums">{c.regNumber}</span>
+                    )}
+                    <span className="flex-1 min-w-0 truncate">
+                      {c.titleEn ?? c.titleTh}
+                    </span>
+                    <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
       <p className="mt-4 text-[11px] text-muted-foreground italic">
         AI reasoning: {result.reasoning}

@@ -38,6 +38,18 @@ export interface RegulationAnswer {
   }>;
   confidence: "high" | "medium" | "low";
   reasoning: string;
+  /**
+   * Top regulations retrieved by search, whether or not the AI picked any.
+   * Surfaced in the UI when hasAnswer is false so the user can browse the
+   * candidates themselves.
+   */
+  topCandidates: Array<{
+    id: number;
+    titleEn: string | null;
+    titleTh: string;
+    regulationTypeName: string | null;
+    regNumber: string | null;
+  }>;
 }
 
 interface Candidate extends Record<string, unknown> {
@@ -170,9 +182,14 @@ CANDIDATE REGULATIONS (top ${candidates.length} matches from the corpus)
 ${block}
 
 YOUR TASK
-1. Decide whether the candidates actually contain content that answers this question (set has_answer accordingly). Default to has_answer=false when uncertain — false-positive answers are worse than honest "I don't know".
+1. Decide whether the candidates contain content that addresses the question's TOPIC (set has_answer accordingly). RECOGNIZE SYNONYMS in both directions:
+   "online meeting" = "electronic meeting" = "E-AGM" = "ประชุมผ่านสื่ออิเล็กทรอนิกส์"
+   "attend / participate / join / เข้าร่วม"
+   "physical meeting" = "in-person" = "on-site"
+   "shareholder" = "investor" (when context fits)
+   If a candidate talks about the SAME TOPIC even with different wording, that counts — set has_answer=true.
 2. If has_answer=true: synthesize a 2-5 sentence answer in the same language the user asked in. Cite specific regulation IDs (the [#N · id=X] markers above) in citation_ids. Quote specific section numbers (e.g. "มาตรา 103") where the regulation contains them.
-3. If has_answer=false: say so clearly. Suggest the user try different keywords or upload a relevant source document. Empty citation_ids.
+3. Only set has_answer=false if NO candidate actually discusses the question's topic. Be generous — surfacing a related FAQ is more useful than a hard "I don't know".
 
 RULES
 - Answer EXCLUSIVELY from the candidate text above. Do not invent facts.
@@ -201,8 +218,17 @@ export async function askRegulations(question: string): Promise<RegulationAnswer
       citations: [],
       confidence: "low",
       reasoning: "No candidates retrieved from corpus.",
+      topCandidates: [],
     };
   }
+
+  const topCandidates = candidates.slice(0, 5).map((c) => ({
+    id: c.id,
+    titleEn: c.title_en,
+    titleTh: c.title_th,
+    regulationTypeName: c.regulation_type_name,
+    regNumber: c.reg_number,
+  }));
 
   const groq = new Groq({ apiKey });
   let lastError: Error | null = null;
@@ -244,6 +270,7 @@ export async function askRegulations(question: string): Promise<RegulationAnswer
         citations: cited,
         confidence: parsed.confidence,
         reasoning: parsed.reasoning,
+        topCandidates,
       };
     } catch (err) {
       lastError = err as Error;

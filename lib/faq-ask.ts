@@ -39,6 +39,19 @@ export interface AskResponse {
   confidence: "high" | "medium" | "low";
   reasoning: string;
   candidatesShown: { faqIds: number[]; regulationIds: number[] };
+  /**
+   * Top FAQ candidates retrieved, regardless of whether the AI picked one.
+   * Surfaced in the UI when matchType is no_match (or low-confidence
+   * ai_suggestion) so the user can spot the answer themselves if the model
+   * missed it.
+   */
+  topFaqCandidates: {
+    id: number;
+    questionTh: string;
+    questionEn: string | null;
+    status: string;
+    topic: string | null;
+  }[];
 }
 
 interface FaqCandidate extends Record<string, unknown> {
@@ -304,12 +317,23 @@ ${regBlock}
 
 RULES
 - Prefer verified_faq > draft_faq > ai_suggestion > no_match.
-- An FAQ matches only if it directly addresses the user's question. Loose topical \
-overlap is NOT a match — answer their actual question.
-- For ai_suggestion, base the answer EXCLUSIVELY on the regulations above. Do not \
-invent facts. Cite specific Thai law sections (e.g. มาตรา 103) when relevant. \
+- An FAQ matches if it answers the SAME underlying question, even if phrased \
+with different words. RECOGNIZE SYNONYMS — both directions:
+    "online meeting" = "electronic meeting" = "e-meeting" = "E-AGM" \
+= "virtual meeting" = "ประชุมผ่านสื่ออิเล็กทรอนิกส์"
+    "attend" = "participate" = "join" = "เข้าร่วม"
+    "physical meeting" = "in-person meeting" = "on-site meeting" = "Physical AGM"
+    "hybrid meeting" = mixed in-person + electronic
+    "shareholder" = "investor" (when context matches)
+  If the candidate covers the user's TOPIC and answers their actual concern, \
+that's a match — don't reject it just because the wording differs.
+- An FAQ does NOT match if it only shares vague topical overlap — e.g. don't \
+claim a 'voting procedures' FAQ answers a 'dividend timing' question.
+- For ai_suggestion, base the answer EXCLUSIVELY on the regulations above. Do \
+not invent facts. Cite specific Thai law sections (e.g. มาตรา 103) when relevant. \
 Keep answers to 2-5 sentences. Output BOTH Thai and English.
-- For no_match, leave all suggested_* fields null and set confidence='low'.
+- For no_match, leave all suggested_* fields null and set confidence='low'. Only \
+use no_match when you genuinely cannot find ANY topical match in the candidates.
 
 Return JSON conforming to the schema.`;
 }
@@ -409,6 +433,13 @@ export async function askFaq(question: string): Promise<AskResponse> {
       faqIds: faqs.map((f) => f.id),
       regulationIds: regs.map((r) => r.id),
     },
+    topFaqCandidates: faqs.slice(0, 5).map((f) => ({
+      id: f.id,
+      questionTh: f.question_th,
+      questionEn: f.question_en,
+      status: f.status,
+      topic: f.topic,
+    })),
   };
 }
 
