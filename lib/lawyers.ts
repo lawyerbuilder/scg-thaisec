@@ -10,7 +10,16 @@ import { db } from "./db";
 
 export type Role = "admin" | "verifier" | "user";
 
-export interface Lawyer extends Record<string, unknown> {
+export interface CapabilityGrants {
+  grantVerifyFaqs: boolean;
+  grantEditFaqs: boolean;
+  grantImproveFaqs: boolean;
+  grantGenerateFaqs: boolean;
+  grantUpload: boolean;
+  grantManageRoster: boolean;
+}
+
+export interface Lawyer extends Record<string, unknown>, CapabilityGrants {
   id: number;
   email: string;
   name: string;
@@ -21,19 +30,32 @@ export interface Lawyer extends Record<string, unknown> {
   updatedAt: string;
 }
 
+export const EMPTY_GRANTS: CapabilityGrants = {
+  grantVerifyFaqs: false,
+  grantEditFaqs: false,
+  grantImproveFaqs: false,
+  grantGenerateFaqs: false,
+  grantUpload: false,
+  grantManageRoster: false,
+};
+
+const SELECT_FIELDS = sql`
+  id, email, name, role, active, notes,
+  grant_verify_faqs AS "grantVerifyFaqs",
+  grant_edit_faqs AS "grantEditFaqs",
+  grant_improve_faqs AS "grantImproveFaqs",
+  grant_generate_faqs AS "grantGenerateFaqs",
+  grant_upload AS "grantUpload",
+  grant_manage_roster AS "grantManageRoster",
+  to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "createdAt",
+  to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "updatedAt"
+`;
+
 export async function listLawyers(opts: { activeOnly?: boolean } = {}): Promise<Lawyer[]> {
   const onlyActive = opts.activeOnly ?? false;
   const filter = onlyActive ? sql`WHERE active IS TRUE` : sql``;
   const rows = await db.execute<Lawyer>(sql`
-    SELECT
-      id,
-      email,
-      name,
-      role,
-      active,
-      notes,
-      to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "createdAt",
-      to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "updatedAt"
+    SELECT ${SELECT_FIELDS}
     FROM lawyers
     ${filter}
     ORDER BY active DESC, name ASC
@@ -43,10 +65,7 @@ export async function listLawyers(opts: { activeOnly?: boolean } = {}): Promise<
 
 export async function getLawyerByEmail(email: string): Promise<Lawyer | null> {
   const rows = await db.execute<Lawyer>(sql`
-    SELECT
-      id, email, name, role, active, notes,
-      to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "createdAt",
-      to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "updatedAt"
+    SELECT ${SELECT_FIELDS}
     FROM lawyers
     WHERE lower(email) = lower(${email})
     LIMIT 1
@@ -82,7 +101,7 @@ export async function createLawyer(input: CreateLawyerInput): Promise<Lawyer> {
   return row;
 }
 
-export interface UpdateLawyerInput {
+export interface UpdateLawyerInput extends Partial<CapabilityGrants> {
   id: number;
   name?: string;
   role?: Role;
@@ -96,6 +115,12 @@ export async function updateLawyer(input: UpdateLawyerInput): Promise<Lawyer | n
   if (input.role !== undefined) sets.push(sql`role = ${input.role}`);
   if (input.active !== undefined) sets.push(sql`active = ${input.active}`);
   if (input.notes !== undefined) sets.push(sql`notes = ${input.notes}`);
+  if (input.grantVerifyFaqs !== undefined) sets.push(sql`grant_verify_faqs = ${input.grantVerifyFaqs}`);
+  if (input.grantEditFaqs !== undefined) sets.push(sql`grant_edit_faqs = ${input.grantEditFaqs}`);
+  if (input.grantImproveFaqs !== undefined) sets.push(sql`grant_improve_faqs = ${input.grantImproveFaqs}`);
+  if (input.grantGenerateFaqs !== undefined) sets.push(sql`grant_generate_faqs = ${input.grantGenerateFaqs}`);
+  if (input.grantUpload !== undefined) sets.push(sql`grant_upload = ${input.grantUpload}`);
+  if (input.grantManageRoster !== undefined) sets.push(sql`grant_manage_roster = ${input.grantManageRoster}`);
   if (sets.length === 0) return readById(input.id);
 
   const setClause = sets.reduce<ReturnType<typeof sql>>(
@@ -110,10 +135,7 @@ export async function updateLawyer(input: UpdateLawyerInput): Promise<Lawyer | n
 
 async function readById(id: number): Promise<Lawyer | null> {
   const rows = await db.execute<Lawyer>(sql`
-    SELECT
-      id, email, name, role, active, notes,
-      to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "createdAt",
-      to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "updatedAt"
+    SELECT ${SELECT_FIELDS}
     FROM lawyers WHERE id = ${id} LIMIT 1
   `);
   return (rows.rows[0] as unknown as Lawyer) ?? null;

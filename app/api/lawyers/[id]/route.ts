@@ -15,7 +15,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!Number.isFinite(id)) {
     return NextResponse.json({ error: "invalid id" }, { status: 400 });
   }
-  let body: { name?: unknown; role?: unknown; active?: unknown; notes?: unknown };
+  let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
@@ -26,12 +26,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       body.role === "admin" || body.role === "verifier" || body.role === "user"
         ? body.role
         : undefined;
+    const boolOrUndef = (k: string): boolean | undefined =>
+      typeof body[k] === "boolean" ? (body[k] as boolean) : undefined;
     const lawyer = await updateLawyer({
       id,
       name: typeof body.name === "string" ? body.name : undefined,
       role,
       active: typeof body.active === "boolean" ? body.active : undefined,
       notes: typeof body.notes === "string" ? body.notes : undefined,
+      grantVerifyFaqs: boolOrUndef("grantVerifyFaqs"),
+      grantEditFaqs: boolOrUndef("grantEditFaqs"),
+      grantImproveFaqs: boolOrUndef("grantImproveFaqs"),
+      grantGenerateFaqs: boolOrUndef("grantGenerateFaqs"),
+      grantUpload: boolOrUndef("grantUpload"),
+      grantManageRoster: boolOrUndef("grantManageRoster"),
     });
     if (!lawyer) return NextResponse.json({ error: "not found" }, { status: 404 });
     return NextResponse.json({ lawyer });

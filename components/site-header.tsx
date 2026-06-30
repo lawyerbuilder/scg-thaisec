@@ -12,7 +12,7 @@ export async function SiteHeader() {
   // Lightweight count for the nav badge — fails silently if DB is unreachable
   const draftCount = await countFaqs({ status: "draft" }).catch(() => 0);
   const currentUser = await getCurrentUser().catch(() => null);
-  const perms = permissionsFor(currentUser?.role ?? null);
+  const perms = permissionsFor(currentUser ?? null);
   return (
     <>
       {/* Thin authoritative red strip — the "official" signal */}
