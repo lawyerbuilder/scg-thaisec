@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import type { ScrapedRow } from "./nrs";
 import { extractPdfText, wordCount } from "./pdf";
 import { classifyDocumentType } from "./queries";
+import { storeRegulationEmbedding, regulationEmbeddingText } from "@/lib/embeddings";
 
 export type IngestOutcome = "new" | "duplicate" | "skipped" | "error";
 
@@ -45,18 +46,34 @@ export async function ingestOne(row: ScrapedRow): Promise<IngestResult> {
   const wc = wordCount(bodyTh);
 
   try {
-    await db.execute(sql`
+    const result = await db.execute<{ id: number }>(sql`
       INSERT INTO regulations (
+        source_type,
         doc_id, ref_id, regulation_type_id, title_th, reg_number,
         document_type, publication_date, effective_date, status,
         pdf_url, pdf_text_url, doc_url, source_url, body_th, word_count
       ) VALUES (
+        'sec_nrs',
         ${row.docId}, ${row.refId}, ${typeId}, ${row.titleTh}, ${row.regNumber},
         ${row.documentType}, ${row.publicationDate}, ${row.effectiveDate}, ${row.status},
         ${row.pdfUrl}, ${row.pdfTextUrl}, ${row.docUrl}, ${row.sourceUrl}, ${bodyTh}, ${wc}
       )
-      ON CONFLICT (doc_id) DO NOTHING
+      ON CONFLICT (doc_id) WHERE doc_id IS NOT NULL DO NOTHING
+      RETURNING id
     `);
+    const newId = result.rows[0]?.id;
+    if (newId && bodyTh && bodyTh.length >= 50) {
+      // Best-effort vector embedding — failures swallowed in storeRegulationEmbedding
+      await storeRegulationEmbedding(
+        newId,
+        regulationEmbeddingText({
+          titleTh: row.titleTh,
+          titleEn: null,
+          bodyTh,
+          bodyEn: null,
+        })
+      );
+    }
     return { outcome: "new" };
   } catch (err) {
     return { outcome: "error", reason: (err as Error).message };

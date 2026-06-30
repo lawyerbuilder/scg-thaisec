@@ -131,7 +131,17 @@ export function classifyDocumentType(documentType: string | null | undefined): s
  *
  * The exact bucket → category mapping is opaque (the form is JS-rendered, so
  * we can't enumerate it via WebFetch). We start with 5 IDs that have been
- * observed live (ref_id=80 returned data during exploration) and expand
- * empirically. INGEST_MAX_DOCS caps the run.
+ * observed live (ref_id=80 returned data during exploration). INGEST_MAX_DOCS
+ * caps the run.
  */
 export const DEFAULT_REF_IDS = [80, 1, 2, 3, 4];
+
+/**
+ * Wider sweep for `scripts/ingest-bulk.ts` — probes 1..100. Empty buckets are
+ * skipped after the first attempt so the script doesn't waste time on them.
+ */
+export const BULK_REF_IDS: number[] = (() => {
+  const ids: number[] = [];
+  for (let i = 1; i <= 100; i++) ids.push(i);
+  return ids;
+})();
