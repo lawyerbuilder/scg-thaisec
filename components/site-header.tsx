@@ -41,6 +41,9 @@ export function SiteHeader() {
             <Link href="/upload" className="hover:text-foreground transition-colors">
               FAQ generator
             </Link>
+            <Link href="/admin/lawyers" className="hover:text-foreground transition-colors">
+              Lawyers
+            </Link>
             <Link href="/types" className="hover:text-foreground transition-colors">
               Categories
             </Link>

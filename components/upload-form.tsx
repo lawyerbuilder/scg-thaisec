@@ -1,9 +1,16 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Upload, Loader2, FileCheck2, AlertCircle } from "lucide-react";
 import { SUPPORTED_EXTENSIONS } from "@/lib/parse-document";
+
+interface LawyerOption {
+  id: number;
+  email: string;
+  name: string;
+}
 
 interface UploadResponse {
   regulationId: number;
@@ -27,6 +34,28 @@ export function UploadForm() {
   const [result, setResult] = useState<UploadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [lawyers, setLawyers] = useState<LawyerOption[]>([]);
+  const [lawyersLoading, setLawyersLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/lawyers?active=1");
+        const json = await res.json();
+        if (cancelled) return;
+        const list = (json.lawyers ?? []) as LawyerOption[];
+        setLawyers(list);
+      } catch {
+        // dropdown will be empty; user can still type or visit /admin/lawyers
+      } finally {
+        if (!cancelled) setLawyersLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function handleFileChange(f: File | null) {
     setFile(f);
@@ -114,21 +143,48 @@ export function UploadForm() {
         />
       </label>
 
-      {/* Assign to a lawyer for verification */}
+      {/* Assign to a lawyer from the managed roster */}
       <label className="block">
         <span className="eyebrow text-[10px] mb-1.5 block">
-          Assign FAQs to (lawyer email — optional)
+          Assign FAQs to (optional)
         </span>
-        <input
-          type="email"
-          value={assignedTo}
-          onChange={(e) => setAssignedTo(e.target.value)}
-          placeholder="e.g. somchai@scg.com — they'll see it as their queue on /faq"
-          className="w-full h-10 px-3 rounded-md border border-border bg-card text-[14px]"
-        />
+        {lawyersLoading ? (
+          <div className="h-10 px-3 rounded-md border border-border bg-card text-[14px] inline-flex items-center text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Loading roster…
+          </div>
+        ) : lawyers.length > 0 ? (
+          <select
+            value={assignedTo}
+            onChange={(e) => setAssignedTo(e.target.value)}
+            className="w-full h-10 px-3 rounded-md border border-border bg-card text-[14px]"
+          >
+            <option value="">— No one (leave unassigned) —</option>
+            {lawyers.map((l) => (
+              <option key={l.id} value={l.email}>
+                {l.name} ({l.email})
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="h-10 px-3 rounded-md border border-border bg-card text-[13px] inline-flex items-center text-muted-foreground">
+            No lawyers in the roster yet —{" "}
+            <Link
+              href="/admin/lawyers"
+              className="ml-1 text-primary underline underline-offset-2 hover:no-underline"
+            >
+              add one
+            </Link>
+            .
+          </div>
+        )}
         <span className="mt-1 block text-[11px] text-muted-foreground">
-          The generated draft FAQs land in that person&apos;s verification queue.
-          Leave blank to leave them unassigned.
+          The selected lawyer will see these drafts as their queue on{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-[11px]">/faq?assignee=…</code>.
+          Roster is managed at{" "}
+          <Link href="/admin/lawyers" className="text-primary hover:underline">
+            /admin/lawyers
+          </Link>
+          .
         </span>
       </label>
 
