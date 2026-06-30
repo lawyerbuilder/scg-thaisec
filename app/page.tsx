@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { SearchBar } from "@/components/search-bar";
 import { FavoritesGrid } from "@/components/favorites-grid";
+import { ProductTour } from "@/components/product-tour";
 import {
   listRegulationTypes,
   listSubjectCounts,
@@ -97,6 +98,11 @@ export default async function HomePage() {
             <span className="font-semibold text-emerald-700">{faqVerified}</span> verified by lawyers
           </span>
         </p>
+
+        {/* Tour entry point — auto-opens on first visit */}
+        <div className="mt-5">
+          <ProductTour />
+        </div>
       </section>
 
       {/* HOW IT WORKS — explicit 4-step workflow */}
