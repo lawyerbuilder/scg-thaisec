@@ -107,7 +107,7 @@ export async function fetchRefIdBucket(refId: number): Promise<ScrapedRow[]> {
   if (!res.ok) {
     throw new Error(`NRS bucket ${refId} returned HTTP ${res.status}`);
   }
-  const html = await res.text();
+  const html = await decodeWithCorrectEncoding(res);
   const $ = cheerio.load(html);
 
   const rows: ScrapedRow[] = [];
@@ -160,4 +160,46 @@ export async function fetchRefIdBucket(refId: number): Promise<ScrapedRow[]> {
     seen.add(r.docId);
     return true;
   });
+}
+
+/**
+ * The Thai SEC NRS portal serves HTML in Windows-874 / TIS-620 (the legacy
+ * Thai charset), NOT UTF-8. `res.text()` would decode as UTF-8 by default and
+ * mangle every Thai byte into `�`. We read raw bytes, sniff the encoding from
+ * the HTTP Content-Type header and the HTML `<meta charset>` tag, then decode
+ * with the right TextDecoder. Falls back to windows-874 when no hint is found
+ * (true for NRS today — they don't declare a charset).
+ */
+async function decodeWithCorrectEncoding(res: Response): Promise<string> {
+  const buffer = await res.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+
+  let charset: string | undefined;
+
+  // 1) HTTP header hint
+  const contentType = res.headers.get("content-type") ?? "";
+  const headerMatch = contentType.match(/charset=([^;\s]+)/i);
+  if (headerMatch) charset = headerMatch[1].trim().toLowerCase();
+
+  // 2) <meta charset="..."> or <meta http-equiv="Content-Type" content="...">
+  if (!charset) {
+    const head = new TextDecoder("ascii").decode(bytes.slice(0, 2048));
+    const metaCharset =
+      head.match(/<meta[^>]+charset=["']?([\w-]+)/i)?.[1] ??
+      head.match(/<meta[^>]+content=["'][^"']*charset=([^"';\s]+)/i)?.[1];
+    if (metaCharset) charset = metaCharset.trim().toLowerCase();
+  }
+
+  // 3) Fallback for Thai SEC NRS — empirically windows-874
+  if (!charset) charset = "windows-874";
+
+  // Aliases that TextDecoder doesn't accept directly
+  if (charset === "tis-620" || charset === "iso-8859-11") charset = "windows-874";
+
+  try {
+    return new TextDecoder(charset, { fatal: false }).decode(bytes);
+  } catch {
+    // Last-ditch: TextDecoder doesn't know the label — try UTF-8 and accept mojibake
+    return new TextDecoder("utf-8").decode(bytes);
+  }
 }
