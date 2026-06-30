@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Save } from "lucide-react";
+import {
+  Save,
+  Sparkles,
+  Loader2,
+  Check,
+  AlertCircle,
+  ExternalLink,
+} from "lucide-react";
+import Link from "next/link";
 import { updateFaqAction, type FaqEditPayload } from "@/app/faq/[id]/actions";
 
 interface EditableFaq {
@@ -13,11 +21,28 @@ interface EditableFaq {
   topic: string;
 }
 
+interface Improvement {
+  improvedQuestionTh: string;
+  improvedQuestionEn: string;
+  improvedAnswerTh: string;
+  improvedAnswerEn: string;
+  improvementsMade: string[];
+  confidence: "high" | "medium" | "low";
+  warnings: string[];
+  groundedInRegulationId: number | null;
+  groundedInRegulationTitle: string | null;
+}
+
 export function FaqEditForm({ faq }: { faq: EditableFaq }) {
   const [draft, setDraft] = useState<EditableFaq>(faq);
   const [pending, startTransition] = useTransition();
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // AI improve state
+  const [improving, setImproving] = useState(false);
+  const [improvement, setImprovement] = useState<Improvement | null>(null);
+  const [improveError, setImproveError] = useState<string | null>(null);
 
   const dirty =
     draft.questionTh !== faq.questionTh ||
@@ -25,6 +50,44 @@ export function FaqEditForm({ faq }: { faq: EditableFaq }) {
     draft.answerTh !== faq.answerTh ||
     draft.answerEn !== faq.answerEn ||
     draft.topic !== faq.topic;
+
+  async function onImprove() {
+    if (improving) return;
+    setImproveError(null);
+    setImprovement(null);
+    setImproving(true);
+    try {
+      const res = await fetch(`/api/faq/${faq.id}/improve`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          questionTh: draft.questionTh,
+          questionEn: draft.questionEn,
+          answerTh: draft.answerTh,
+          answerEn: draft.answerEn,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      setImprovement(json as Improvement);
+    } catch (e) {
+      setImproveError((e as Error).message);
+    } finally {
+      setImproving(false);
+    }
+  }
+
+  function applyImprovement() {
+    if (!improvement) return;
+    setDraft({
+      ...draft,
+      questionTh: improvement.improvedQuestionTh,
+      questionEn: improvement.improvedQuestionEn,
+      answerTh: improvement.improvedAnswerTh,
+      answerEn: improvement.improvedAnswerEn,
+    });
+    setImprovement(null); // close panel; lawyer can still tweak before saving
+  }
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +113,44 @@ export function FaqEditForm({ faq }: { faq: EditableFaq }) {
 
   return (
     <form className="space-y-4" onSubmit={onSubmit}>
+      {/* AI improvement panel — sits above the fields */}
+      <div className="rounded-md border border-violet-200 bg-violet-50/40 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[12px] text-violet-900">
+            <Sparkles className="inline h-3.5 w-3.5 mr-1" />
+            Ask the AI to suggest a clearer, better-cited version grounded in the
+            source playbook.
+          </p>
+          <button
+            type="button"
+            onClick={onImprove}
+            disabled={improving}
+            className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-violet-700 disabled:opacity-60 transition-colors"
+          >
+            {improving ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            {improving ? "Thinking…" : "Improve with AI"}
+          </button>
+        </div>
+        {improveError && (
+          <p className="mt-2 text-[12px] text-rose-700">
+            <AlertCircle className="inline h-3 w-3 mr-1" />
+            {improveError}
+          </p>
+        )}
+        {improvement && (
+          <ImprovementPreview
+            improvement={improvement}
+            currentDraft={draft}
+            onApply={applyImprovement}
+            onDismiss={() => setImprovement(null)}
+          />
+        )}
+      </div>
+
       <Field label="Question (Thai)">
         <textarea
           value={draft.questionTh}
@@ -136,5 +237,104 @@ function Field({
       <span className="eyebrow text-[10px] mb-1.5 block">{label}</span>
       {children}
     </label>
+  );
+}
+
+function ImprovementPreview({
+  improvement,
+  currentDraft,
+  onApply,
+  onDismiss,
+}: {
+  improvement: Improvement;
+  currentDraft: EditableFaq;
+  onApply: () => void;
+  onDismiss: () => void;
+}) {
+  const qChanged = improvement.improvedQuestionEn !== currentDraft.questionEn;
+  const aChanged = improvement.improvedAnswerEn !== currentDraft.answerEn;
+  return (
+    <div className="mt-3 rounded-md bg-white border border-violet-200 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <p className="text-[12px] font-medium text-violet-900">
+          Suggested rewrite (confidence: {improvement.confidence})
+        </p>
+        {improvement.groundedInRegulationId && (
+          <Link
+            href={`/regulations/${improvement.groundedInRegulationId}`}
+            className="text-[11px] text-primary hover:underline inline-flex items-center gap-1"
+          >
+            Grounded in: {improvement.groundedInRegulationTitle}
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+        )}
+      </div>
+
+      {improvement.improvementsMade.length > 0 && (
+        <div className="mb-3">
+          <p className="eyebrow text-[10px] mb-1.5">What changed</p>
+          <ul className="list-disc ml-5 space-y-0.5 text-[12px] text-foreground/80">
+            {improvement.improvementsMade.map((m, i) => (
+              <li key={i}>{m}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {improvement.warnings.length > 0 && (
+        <div className="mb-3 rounded-md bg-amber-50 border border-amber-200 p-2.5">
+          <p className="text-[11px] font-medium text-amber-900 mb-1">
+            <AlertCircle className="inline h-3 w-3 mr-1" /> Reviewer warnings
+          </p>
+          <ul className="list-disc ml-5 space-y-0.5 text-[11px] text-amber-900">
+            {improvement.warnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="space-y-2 text-[12px]">
+        {qChanged && (
+          <DiffRow label="Question (EN)" before={currentDraft.questionEn} after={improvement.improvedQuestionEn} />
+        )}
+        {aChanged && (
+          <DiffRow label="Answer (EN)" before={currentDraft.answerEn} after={improvement.improvedAnswerEn} />
+        )}
+        {!qChanged && !aChanged && (
+          <p className="text-muted-foreground italic">No textual changes suggested.</p>
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={onApply}
+          className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-emerald-700 transition-colors"
+        >
+          <Check className="h-3.5 w-3.5" /> Apply to form
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-3 py-1.5 text-xs text-muted-foreground hover:border-foreground/30 transition-colors"
+        >
+          Dismiss
+        </button>
+        <span className="text-[11px] text-muted-foreground">
+          Apply just fills the form — you still need to click Save changes below.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function DiffRow({ label, before, after }: { label: string; before: string; after: string }) {
+  return (
+    <div className="rounded border border-border bg-card p-2">
+      <p className="eyebrow text-[10px] mb-1">{label}</p>
+      <p className="text-rose-700/80 line-through whitespace-pre-wrap">{before || "(empty)"}</p>
+      <p className="mt-1 text-emerald-800 whitespace-pre-wrap">{after}</p>
+    </div>
   );
 }
