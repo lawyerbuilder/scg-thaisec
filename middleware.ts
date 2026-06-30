@@ -51,7 +51,7 @@ export function middleware(req: NextRequest) {
     {
       status: 401,
       headers: {
-        "WWW-Authenticate": 'Basic realm="SCG ThaiSEC — internal use only"',
+        "WWW-Authenticate": 'Basic realm="SCG ThaiSEC internal tool"',
         "Content-Type": "text/plain; charset=utf-8",
       },
     }
