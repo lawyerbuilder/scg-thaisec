@@ -16,8 +16,11 @@
 
 import { generateText } from "ai";
 
-const MODEL = "google/gemini-2.0-flash-lite";
-const FALLBACK_MODEL = "google/gemini-2.5-flash-lite";
+// 2.0-flash-lite was retired from AI Gateway. 2.5 is the current generation
+// and the only one that handles PDFs in the Lite tier cheaply. Keep the array
+// shape so it's easy to add a fallback if 2.5 ever gets gated.
+const MODEL = "google/gemini-2.5-flash-lite";
+const FALLBACK_MODEL = "google/gemini-2.5-flash";
 const MAX_PDF_BYTES = 20 * 1024 * 1024; // 20MB ceiling
 const FETCH_UA =
   process.env.INGEST_USER_AGENT ??
@@ -79,7 +82,10 @@ export async function ocrPdf(url: string): Promise<string | null> {
     return null;
   }
 
-  for (const model of [MODEL, FALLBACK_MODEL]) {
+  // Only try the primary model. Falling back when rate-limited just burns
+  // through the same per-minute budget on a different model without helping.
+  // Re-enable the fallback array if 2.5-flash-lite is ever retired or 503s.
+  for (const model of [MODEL]) {
     try {
       const result = await generateText({
         model,

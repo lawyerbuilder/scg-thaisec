@@ -22,7 +22,10 @@ import { db } from "@/lib/db";
 import { ocrPdf } from "@/lib/ocr-pdf";
 import { storeRegulationEmbedding, regulationEmbeddingText } from "@/lib/embeddings";
 
-const PER_CALL_DELAY_MS = 1000;
+// AI Gateway free tier on Gemini 2.5 Flash Lite is actually closer to ~3 RPM
+// in practice. 25s delay = 2.4 RPM safe. Each OCR also fires an embedding
+// call against the same RPM budget. Drop to 1000ms once paid credits added.
+const PER_CALL_DELAY_MS = 25000;
 
 interface CliFlags {
   limit: number | null;
