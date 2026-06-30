@@ -55,10 +55,20 @@ export default async function HomePage() {
           Turn Thai regulations into verified FAQs your team can search.
         </h1>
         <p className="mt-5 text-lg text-muted-foreground text-balance max-w-2xl mx-auto leading-relaxed">
-          Upload a regulation, playbook, or any source document. The AI drafts
-          Q&amp;A pairs grounded in the content and routes them to a lawyer for
-          review. Verified answers join a searchable bilingual corpus —
-          available here, in Claude, or in ChatGPT.
+          We pull official Thai SEC notifications directly from{" "}
+          <a
+            href="https://capital.sec.or.th/"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-foreground underline underline-offset-2 hover:no-underline"
+          >
+            capital.sec.or.th
+          </a>{" "}
+          and combine them with SCG&apos;s internal playbooks and any document
+          you upload. The AI drafts Q&amp;A pairs grounded in the source and
+          routes them to a lawyer for review. Verified answers join a
+          searchable bilingual corpus — available here, in Claude, or in
+          ChatGPT.
         </p>
 
         {/* Primary CTAs that mirror the workflow */}
@@ -117,8 +127,8 @@ export default async function HomePage() {
           <StepCard
             n={1}
             icon={<Upload className="h-4 w-4" />}
-            title="Upload"
-            body="Drop a PDF, DOCX, or text file — a Thai SEC regulation, an internal playbook, or any compliance source."
+            title="Sources flow in"
+            body="Three intake channels: an automated crawler that pulls Thai SEC notifications from capital.sec.or.th, internal playbooks loaded from our Notion export, and any document you drop on the uploader."
             href="/upload"
             cta="Open uploader"
           />
