@@ -12,30 +12,39 @@
  * refreshes the row's embedding.
  *
  * Usage:
- *   npm run backfill:ocr                # all eligible
- *   npm run backfill:ocr -- --limit 3   # smoke test
+ *   npm run backfill:ocr                          # all eligible (default: claude)
+ *   npm run backfill:ocr -- --limit 3             # smoke test
  *   npm run backfill:ocr -- --ids 866,867
+ *   npm run backfill:ocr -- --engine gemini       # use Vercel AI Gateway (rate-limited)
+ *   npm run backfill:ocr -- --engine claude       # use local `claude` CLI (Max sub, default)
  */
 
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { ocrPdf } from "@/lib/ocr-pdf";
+import { ocrPdfViaClaude } from "@/lib/ocr-pdf-claude";
 import { storeRegulationEmbedding, regulationEmbeddingText } from "@/lib/embeddings";
 
-// AI Gateway free tier on Gemini 2.5 Flash Lite is actually closer to ~3 RPM
-// in practice. 25s delay = 2.4 RPM safe. Each OCR also fires an embedding
-// call against the same RPM budget. Drop to 1000ms once paid credits added.
-const PER_CALL_DELAY_MS = 25000;
+type Engine = "claude" | "gemini";
+
+// Gemini free tier: ~3 RPM. 25s delay = 2.4 RPM safe.
+// Claude CLI: no per-minute limit on Max, can hammer it. 1s pad anyway.
+const DELAY_FOR_ENGINE: Record<Engine, number> = {
+  gemini: 25_000,
+  claude: 1_000,
+};
 
 interface CliFlags {
   limit: number | null;
   ids: number[] | null;
+  engine: Engine;
 }
 
 function parseFlags(): CliFlags {
   const argv = process.argv.slice(2);
   let limit: number | null = null;
   let ids: number[] | null = null;
+  let engine: Engine = "claude";
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--limit") {
       const n = Number(argv[i + 1]);
@@ -48,9 +57,13 @@ function parseFlags(): CliFlags {
         .map((s) => Number(s.trim()))
         .filter((n) => Number.isFinite(n));
       i += 1;
+    } else if (argv[i] === "--engine") {
+      const v = argv[i + 1];
+      if (v === "claude" || v === "gemini") engine = v;
+      i += 1;
     }
   }
-  return { limit, ids };
+  return { limit, ids, engine };
 }
 
 interface Row extends Record<string, unknown> {
@@ -79,7 +92,11 @@ async function main() {
     ${limitClause}
   `);
 
-  console.log(`[ocr] ${rows.rows.length} eligible regulations`);
+  const delay = DELAY_FOR_ENGINE[flags.engine];
+  const engineFn = flags.engine === "claude" ? ocrPdfViaClaude : ocrPdf;
+  console.log(
+    `[ocr] ${rows.rows.length} eligible regulations · engine=${flags.engine} · delay=${delay}ms`
+  );
   let ok = 0;
   let empty = 0;
   let fail = 0;
@@ -94,11 +111,11 @@ async function main() {
       fail += 1;
       continue;
     }
-    const text = await ocrPdf(url);
+    const text = await engineFn(url);
     if (!text) {
       empty += 1;
       console.log(`  ↩ no text extracted`);
-      await sleep(PER_CALL_DELAY_MS);
+      await sleep(delay);
       continue;
     }
     const wc = text.split(/\s+/).filter(Boolean).length;
@@ -116,7 +133,7 @@ async function main() {
     );
     ok += 1;
     console.log(`  ✓ ${wc} words`);
-    await sleep(PER_CALL_DELAY_MS);
+    await sleep(delay);
   }
 
   console.log(`\n[ocr] DONE — ok=${ok}, empty=${empty}, fail=${fail}`);
