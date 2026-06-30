@@ -21,7 +21,7 @@ export function LawyersAdmin({ initial }: { initial: Lawyer[] }) {
   // Add form
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
-  const [newRole, setNewRole] = useState<"lawyer" | "admin">("lawyer");
+  const [newRole, setNewRole] = useState<"admin" | "verifier" | "user">("verifier");
   const [adding, setAdding] = useState(false);
 
   async function onAdd(e: React.FormEvent) {
@@ -46,7 +46,7 @@ export function LawyersAdmin({ initial }: { initial: Lawyer[] }) {
       setLawyers([json.lawyer, ...next].sort(sortLawyers));
       setNewEmail("");
       setNewName("");
-      setNewRole("lawyer");
+      setNewRole("verifier");
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -98,11 +98,14 @@ export function LawyersAdmin({ initial }: { initial: Lawyer[] }) {
           />
           <select
             value={newRole}
-            onChange={(e) => setNewRole(e.target.value as "lawyer" | "admin")}
+            onChange={(e) =>
+              setNewRole(e.target.value as "admin" | "verifier" | "user")
+            }
             className="h-10 px-3 rounded-md border border-border bg-card text-[14px]"
           >
-            <option value="lawyer">Lawyer (verifies FAQs)</option>
-            <option value="admin">Admin (also manages roster)</option>
+            <option value="user">User — read only (browse + AI ask)</option>
+            <option value="verifier">Verifier — review &amp; edit FAQs</option>
+            <option value="admin">Admin — upload docs, manage roster</option>
           </select>
           <button
             type="submit"
@@ -172,7 +175,7 @@ function LawyerRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(lawyer.name);
-  const [role, setRole] = useState<"lawyer" | "admin">(lawyer.role);
+  const [role, setRole] = useState<"admin" | "verifier" | "user">(lawyer.role);
   const [pending, startTransition] = useTransition();
 
   function save() {
@@ -200,18 +203,23 @@ function LawyerRow({
         {editing ? (
           <select
             value={role}
-            onChange={(e) => setRole(e.target.value as "lawyer" | "admin")}
+            onChange={(e) =>
+              setRole(e.target.value as "admin" | "verifier" | "user")
+            }
             className="h-8 px-2 rounded border border-border bg-card text-[12px]"
           >
-            <option value="lawyer">Lawyer</option>
+            <option value="user">User</option>
+            <option value="verifier">Verifier</option>
             <option value="admin">Admin</option>
           </select>
         ) : lawyer.role === "admin" ? (
           <span className="inline-flex items-center gap-1 text-violet-700 text-[12px]">
             <Shield className="h-3 w-3" /> Admin
           </span>
+        ) : lawyer.role === "verifier" ? (
+          <span className="text-[12px] text-emerald-700">Verifier</span>
         ) : (
-          <span className="text-[12px] text-muted-foreground">Lawyer</span>
+          <span className="text-[12px] text-muted-foreground">User</span>
         )}
       </td>
       <td className="px-4 py-3">

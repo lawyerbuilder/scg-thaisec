@@ -1,10 +1,16 @@
 import { listLawyers } from "@/lib/lawyers";
 import { LawyersAdmin } from "@/components/lawyers-admin";
+import { getCurrentPermissions } from "@/lib/auth";
+import { RoleGate } from "@/components/role-gate";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Lawyers · Admin" };
 
 export default async function LawyersAdminPage() {
+  const perms = await getCurrentPermissions();
+  if (!perms.canManageRoster) {
+    return <RoleGate required="admin" page="Lawyers roster" />;
+  }
   const initial = await listLawyers();
   return (
     <div className="container py-12 max-w-4xl">

@@ -8,11 +8,13 @@
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 
+export type Role = "admin" | "verifier" | "user";
+
 export interface Lawyer extends Record<string, unknown> {
   id: number;
   email: string;
   name: string;
-  role: "lawyer" | "admin";
+  role: Role;
   active: boolean;
   notes: string | null;
   createdAt: string;
@@ -55,7 +57,7 @@ export async function getLawyerByEmail(email: string): Promise<Lawyer | null> {
 export interface CreateLawyerInput {
   email: string;
   name: string;
-  role?: "lawyer" | "admin";
+  role?: Role;
   notes?: string | null;
 }
 
@@ -67,7 +69,7 @@ export async function createLawyer(input: CreateLawyerInput): Promise<Lawyer> {
 
   await db.execute(sql`
     INSERT INTO lawyers (email, name, role, notes)
-    VALUES (${email}, ${name}, ${input.role ?? "lawyer"}, ${input.notes ?? null})
+    VALUES (${email}, ${name}, ${input.role ?? "verifier"}, ${input.notes ?? null})
     ON CONFLICT (lower(email)) DO UPDATE SET
       name = EXCLUDED.name,
       role = EXCLUDED.role,
@@ -83,7 +85,7 @@ export async function createLawyer(input: CreateLawyerInput): Promise<Lawyer> {
 export interface UpdateLawyerInput {
   id: number;
   name?: string;
-  role?: "lawyer" | "admin";
+  role?: Role;
   active?: boolean;
   notes?: string | null;
 }

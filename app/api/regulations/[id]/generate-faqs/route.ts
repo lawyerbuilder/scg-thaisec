@@ -2,11 +2,19 @@ import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { generateAndSaveFaqs } from "@/lib/faq-generator";
+import { getCurrentPermissions } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const perms = await getCurrentPermissions();
+  if (!perms.canGenerateFaqs) {
+    return NextResponse.json(
+      { error: "Permission denied: this action requires a verifier or admin role." },
+      { status: 403 }
+    );
+  }
   const { id: rawId } = await params;
   const id = Number(rawId);
   if (!Number.isFinite(id)) {

@@ -4,11 +4,15 @@ import { Scale } from "lucide-react";
 import { SearchBar } from "./search-bar";
 import { NavFavoritesLink } from "./nav-favorites-link";
 import { LocaleToggle } from "./locale-toggle";
+import { CurrentUserPicker } from "./current-user-picker";
 import { countFaqs } from "@/lib/faqs";
+import { getCurrentUser, permissionsFor } from "@/lib/auth";
 
 export async function SiteHeader() {
   // Lightweight count for the nav badge — fails silently if DB is unreachable
   const draftCount = await countFaqs({ status: "draft" }).catch(() => 0);
+  const currentUser = await getCurrentUser().catch(() => null);
+  const perms = permissionsFor(currentUser?.role ?? null);
   return (
     <>
       {/* Thin authoritative red strip — the "official" signal */}
@@ -52,12 +56,16 @@ export async function SiteHeader() {
                 </span>
               )}
             </Link>
-            <Link href="/upload" className="hover:text-foreground transition-colors">
-              FAQ generator
-            </Link>
-            <Link href="/admin/lawyers" className="hover:text-foreground transition-colors">
-              Lawyers
-            </Link>
+            {perms.canUploadDocument && (
+              <Link href="/upload" className="hover:text-foreground transition-colors">
+                FAQ generator
+              </Link>
+            )}
+            {perms.canManageRoster && (
+              <Link href="/admin/lawyers" className="hover:text-foreground transition-colors">
+                Lawyers
+              </Link>
+            )}
             <Link href="/types" className="hover:text-foreground transition-colors">
               Categories
             </Link>
@@ -74,7 +82,7 @@ export async function SiteHeader() {
             </Link>
           </nav>
 
-          <div className="ml-auto flex items-center gap-3 w-full max-w-md">
+          <div className="ml-auto flex items-center gap-2 w-full max-w-md">
             <div className="hidden sm:block flex-1">
               <Suspense
                 fallback={<div className="h-9 rounded-md border border-border/70 bg-card" />}
@@ -83,6 +91,7 @@ export async function SiteHeader() {
               </Suspense>
             </div>
             <LocaleToggle className="shrink-0" />
+            <CurrentUserPicker current={currentUser} />
           </div>
         </div>
       </header>

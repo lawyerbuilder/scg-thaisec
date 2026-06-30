@@ -22,10 +22,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
   try {
+    const role =
+      body.role === "admin" || body.role === "verifier" || body.role === "user"
+        ? body.role
+        : undefined;
     const lawyer = await updateLawyer({
       id,
       name: typeof body.name === "string" ? body.name : undefined,
-      role: body.role === "admin" || body.role === "lawyer" ? body.role : undefined,
+      role,
       active: typeof body.active === "boolean" ? body.active : undefined,
       notes: typeof body.notes === "string" ? body.notes : undefined,
     });

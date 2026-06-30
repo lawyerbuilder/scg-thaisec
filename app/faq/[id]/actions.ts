@@ -6,27 +6,15 @@ import { verifyFaq, rejectFaq, updateFaqContent } from "@/lib/faqs";
 import { db } from "@/lib/db";
 import { sendFaqVerifiedEmail } from "@/lib/email";
 import { getLawyerByEmail } from "@/lib/lawyers";
+import { requirePermission } from "@/lib/auth";
 
-/**
- * TODO(auth): replace this with the Clerk-authenticated user's email and an
- * allowlist check. For MVP, anyone can verify/edit. The server-side guard
- * goes here — every mutation should call `getAllowedVerifier()` and 403 if
- * not allowlisted.
- *
- * When Clerk is installed:
- *   import { auth, currentUser } from "@clerk/nextjs/server";
- *   const user = await currentUser();
- *   if (!user) throw new Error("Unauthorized");
- *   const email = user.emailAddresses[0]?.emailAddress;
- *   if (!isAllowedVerifier(email)) throw new Error("Forbidden");
- *   return email;
- */
-async function getVerifierEmail(): Promise<string> {
-  return "preview@scg-thaisec.local";
-}
+// Role-gated. Each action calls requirePermission() from lib/auth.ts which
+// reads the current-user cookie. Returns the actor's email for audit trails.
+// When Clerk is wired, requirePermission() swaps to reading the Clerk session
+// instead of the cookie — this file doesn't change.
 
 export async function verifyFaqAction(faqId: number): Promise<void> {
-  const email = await getVerifierEmail();
+  const email = await requirePermission("canVerifyFaq");
   const updated = await verifyFaq(faqId, email);
   revalidatePath(`/faq/${faqId}`);
   revalidatePath("/faq");
@@ -60,7 +48,7 @@ export async function verifyFaqAction(faqId: number): Promise<void> {
 }
 
 export async function rejectFaqAction(faqId: number): Promise<void> {
-  const email = await getVerifierEmail();
+  const email = await requirePermission("canVerifyFaq");
   await rejectFaq(faqId, email);
   revalidatePath(`/faq/${faqId}`);
   revalidatePath("/faq");
@@ -81,7 +69,7 @@ export interface FaqEditPayload {
  * are no-ops.
  */
 export async function bulkVerifyFaqsAction(faqIds: number[]): Promise<{ verified: number }> {
-  const email = await getVerifierEmail();
+  const email = await requirePermission("canVerifyFaq");
   if (!Array.isArray(faqIds) || faqIds.length === 0) return { verified: 0 };
   let verified = 0;
   for (const id of faqIds) {
@@ -96,7 +84,7 @@ export async function bulkVerifyFaqsAction(faqIds: number[]): Promise<{ verified
  * Bulk reject N FAQs.
  */
 export async function bulkRejectFaqsAction(faqIds: number[]): Promise<{ rejected: number }> {
-  const email = await getVerifierEmail();
+  const email = await requirePermission("canVerifyFaq");
   if (!Array.isArray(faqIds) || faqIds.length === 0) return { rejected: 0 };
   let rejected = 0;
   for (const id of faqIds) {
@@ -111,10 +99,7 @@ export async function updateFaqAction(
   faqId: number,
   payload: FaqEditPayload
 ): Promise<void> {
-  // Even though this is a mutation, we don't need the verifier email for
-  // updates (only verify/reject record who acted). Auth gate still applies
-  // once Clerk is wired.
-  await getVerifierEmail();
+  await requirePermission("canEditFaq");
   await updateFaqContent(faqId, {
     questionTh: payload.questionTh.trim(),
     questionEn: payload.questionEn.trim() || null,

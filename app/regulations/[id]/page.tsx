@@ -11,6 +11,7 @@ import { LocalizedBody } from "@/components/localized-body";
 import { GenerateFaqsButton } from "@/components/generate-faqs-button";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { getCurrentPermissions } from "@/lib/auth";
 
 export const revalidate = 600;
 
@@ -33,6 +34,7 @@ export default async function RegulationDetailPage({
     )
     .catch(() => ({ rows: [{ n: 0 }] }));
   const existingFaqCount = existingFaqs.rows[0]?.n ?? 0;
+  const perms = await getCurrentPermissions();
 
   const titleEn = reg.titleEn ?? null;
   const titleTh = reg.titleTh;
@@ -161,12 +163,14 @@ export default async function RegulationDetailPage({
           />
         )}
 
-        {/* AI FAQ generation — every document can become searchable Q&A */}
-        <GenerateFaqsButton
-          regulationId={reg.id}
-          hasBody={hasAnyBody && bodyTh.length + bodyEn.length >= 200}
-          existingFaqCount={existingFaqCount}
-        />
+        {/* AI FAQ generation — verifier+admin only */}
+        {perms.canGenerateFaqs && (
+          <GenerateFaqsButton
+            regulationId={reg.id}
+            hasBody={hasAnyBody && bodyTh.length + bodyEn.length >= 200}
+            existingFaqCount={existingFaqCount}
+          />
+        )}
       </article>
 
       {related.length > 0 && (

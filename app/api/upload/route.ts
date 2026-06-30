@@ -19,6 +19,7 @@ import { containsThai } from "@/lib/utils";
 import { storeRegulationEmbedding, regulationEmbeddingText } from "@/lib/embeddings";
 import { sendFaqAssignmentEmail } from "@/lib/email";
 import { getLawyerByEmail } from "@/lib/lawyers";
+import { getCurrentPermissions } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -26,6 +27,14 @@ export const maxDuration = 60;
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export async function POST(req: Request) {
+  const perms = await getCurrentPermissions();
+  if (!perms.canUploadDocument) {
+    return NextResponse.json(
+      { error: "Permission denied: uploading documents requires an admin role." },
+      { status: 403 }
+    );
+  }
+
   let formData: FormData;
   try {
     formData = await req.formData();

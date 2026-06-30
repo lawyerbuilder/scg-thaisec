@@ -1,10 +1,16 @@
 import { UploadForm } from "@/components/upload-form";
+import { getCurrentPermissions } from "@/lib/auth";
+import { RoleGate } from "@/components/role-gate";
 
 export const metadata = {
   title: "FAQ generator · SCG ThaiSEC",
 };
 
-export default function UploadPage() {
+export default async function UploadPage() {
+  const perms = await getCurrentPermissions();
+  if (!perms.canUploadDocument) {
+    return <RoleGate required="admin" page="FAQ generator" />;
+  }
   return (
     <div className="container py-12 max-w-2xl">
       <p className="eyebrow">Admin</p>

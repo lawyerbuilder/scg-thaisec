@@ -29,10 +29,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "email and name required" }, { status: 400 });
   }
   try {
+    const role =
+      body.role === "admin" || body.role === "verifier" || body.role === "user"
+        ? body.role
+        : "verifier";
     const lawyer = await createLawyer({
       email: body.email,
       name: body.name,
-      role: body.role === "admin" ? "admin" : "lawyer",
+      role,
       notes: typeof body.notes === "string" ? body.notes : null,
     });
     return NextResponse.json({ lawyer });

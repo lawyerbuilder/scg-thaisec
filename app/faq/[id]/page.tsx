@@ -7,6 +7,7 @@ import { FaqVerifyControls } from "@/components/faq-verify-controls";
 import { FaqEditForm } from "@/components/faq-edit-form";
 import { LocalizedText } from "@/components/localized-text";
 import { LocalizedBody } from "@/components/localized-body";
+import { getCurrentPermissions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,8 @@ export default async function FaqDetailPage({
 
   const faq = await getFaqById(id).catch(() => null);
   if (!faq) notFound();
+
+  const perms = await getCurrentPermissions();
 
   return (
     <div className="container py-10 max-w-3xl">
@@ -88,24 +91,33 @@ export default async function FaqDetailPage({
         <LocalizedBody bodyEn={faq.answerEn ?? ""} bodyTh={faq.answerTh ?? ""} />
       </div>
 
-      {/* Verify / reject controls */}
-      <section className="mt-8 surface p-6">
-        <p className="eyebrow mb-3">Reviewer actions</p>
-        <FaqVerifyControls
-          faqId={faq.id}
-          currentStatus={faq.status}
-        />
-      </section>
+      {/* Verify / reject controls — only for verifier+admin */}
+      {perms.canVerifyFaq && (
+        <section className="mt-8 surface p-6">
+          <p className="eyebrow mb-3">Reviewer actions</p>
+          <FaqVerifyControls faqId={faq.id} currentStatus={faq.status} />
+        </section>
+      )}
 
-      {/* Edit form — edits question + answer + topic, not just the answer */}
-      <section className="mt-8 surface p-6">
-        <p className="eyebrow mb-1">Edit FAQ</p>
-        <p className="text-[12px] text-muted-foreground mb-4">
-          Rewrite the question, the answer, or both. Useful when the original
-          question is too vague or a phrase doesn&apos;t translate well.
+      {/* Edit form — only for verifier+admin. Edits question + answer + topic. */}
+      {perms.canEditFaq && (
+        <section className="mt-8 surface p-6">
+          <p className="eyebrow mb-1">Edit FAQ</p>
+          <p className="text-[12px] text-muted-foreground mb-4">
+            Rewrite the question, the answer, or both. Useful when the original
+            question is too vague or a phrase doesn&apos;t translate well.
+          </p>
+          <FaqEditForm faq={toEditableFaq(faq)} />
+        </section>
+      )}
+
+      {/* Read-only users see an explanation instead */}
+      {!perms.canVerifyFaq && !perms.canEditFaq && (
+        <p className="mt-8 text-[12px] text-muted-foreground text-center">
+          You&apos;re viewing this as a <strong>user</strong>. To verify or edit
+          FAQs, sign in as a verifier (top-right picker).
         </p>
-        <FaqEditForm faq={toEditableFaq(faq)} />
-      </section>
+      )}
     </div>
   );
 }
