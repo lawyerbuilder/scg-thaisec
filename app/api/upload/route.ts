@@ -16,6 +16,7 @@ import { db } from "@/lib/db";
 import { extractFromBuffer, countWords } from "@/lib/parse-document";
 import { generateAndSaveFaqs } from "@/lib/faq-generator";
 import { containsThai } from "@/lib/utils";
+import { storeRegulationEmbedding, regulationEmbeddingText } from "@/lib/embeddings";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -108,6 +109,12 @@ export async function POST(req: Request) {
   if (!regulationId) {
     return NextResponse.json({ error: "failed to insert regulation" }, { status: 500 });
   }
+
+  // Best-effort embed the uploaded regulation for vector search.
+  await storeRegulationEmbedding(
+    regulationId,
+    regulationEmbeddingText({ titleTh: title, titleEn: looksThai ? null : title, bodyTh, bodyEn })
+  );
 
   // 4. Optionally generate FAQs immediately
   let faqResult: { count: number; faqIds: number[] } = { count: 0, faqIds: [] };

@@ -10,6 +10,7 @@
 import { sql } from "drizzle-orm";
 import Groq from "groq-sdk";
 import { db } from "./db";
+import { storeFaqEmbedding, faqEmbeddingText } from "./embeddings";
 
 const MODEL = "openai/gpt-oss-20b";
 
@@ -163,7 +164,20 @@ export async function generateAndSaveFaqs(
       RETURNING id
     `);
     const id = result.rows[0]?.id;
-    if (id) faqIds.push(id);
+    if (id) {
+      faqIds.push(id);
+      // Best-effort embed for vector search. Failures are swallowed inside
+      // storeFaqEmbedding — backfill script can pick up missed rows later.
+      await storeFaqEmbedding(
+        id,
+        faqEmbeddingText({
+          questionTh: f.question_th,
+          questionEn: f.question_en,
+          answerTh: f.answer_th,
+          answerEn: f.answer_en,
+        })
+      );
+    }
   }
   return { count: faqIds.length, faqIds };
 }

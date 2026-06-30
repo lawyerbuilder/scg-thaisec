@@ -16,6 +16,7 @@ import { sql } from "drizzle-orm";
 import Groq from "groq-sdk";
 import { db } from "./db";
 import { containsThai } from "./utils";
+import { tryEmbed, vectorToSql } from "./embeddings";
 
 const MODEL = "openai/gpt-oss-20b";
 const FAQ_CANDIDATES = 8;
@@ -109,23 +110,77 @@ const RESPONSE_SCHEMA = {
   ],
 } as const;
 
-async function retrieveFaqCandidates(question: string): Promise<FaqCandidate[]> {
+async function retrieveFaqCandidates(
+  question: string,
+  questionEmbedding: number[] | null
+): Promise<FaqCandidate[]> {
+  // HYBRID retrieval: vector cosine similarity (if embedding available) PLUS
+  // lexical FTS/trigram, combined with a weighted score. Vector handles
+  // semantic matches ("online meeting" ↔ "e-meeting") that lexical can't.
+  // We over-fetch from each source and re-rank.
   const isThai = containsThai(question);
+
+  if (questionEmbedding) {
+    const vecLit = vectorToSql(questionEmbedding);
+    const lexicalCondition = isThai
+      ? sql`(question_th ILIKE ${"%" + question.slice(0, 60) + "%"} OR similarity(question_th, ${question}) > 0.1)`
+      : sql`search_vector_en @@ websearch_to_tsquery('english', ${question})`;
+    const lexicalScore = isThai
+      ? sql`coalesce(similarity(question_th, ${question}), 0)`
+      : sql`coalesce(ts_rank(search_vector_en, websearch_to_tsquery('english', ${question})), 0)`;
+
+    const rows = await db.execute<FaqCandidate>(sql`
+      WITH vec AS (
+        SELECT id, (1 - (embedding <=> ${vecLit}::vector)) AS sim
+        FROM faqs
+        WHERE embedding IS NOT NULL
+        ORDER BY embedding <=> ${vecLit}::vector
+        LIMIT 30
+      ),
+      lex AS (
+        SELECT id, ${lexicalScore} AS lex_score
+        FROM faqs
+        WHERE ${lexicalCondition}
+        ORDER BY lex_score DESC
+        LIMIT 30
+      ),
+      merged AS (
+        SELECT
+          f.id,
+          coalesce(v.sim, 0) AS sim,
+          coalesce(l.lex_score, 0) AS lex_score
+        FROM faqs f
+        LEFT JOIN vec v ON v.id = f.id
+        LEFT JOIN lex l ON l.id = f.id
+        WHERE v.id IS NOT NULL OR l.id IS NOT NULL
+      )
+      SELECT
+        f.id,
+        f.question_en,
+        f.question_th,
+        f.answer_en,
+        f.answer_th,
+        f.status,
+        f.topic,
+        (0.6 * m.sim + 0.4 * m.lex_score) AS combined_score
+      FROM faqs f
+      JOIN merged m ON m.id = f.id
+      ORDER BY
+        CASE f.status WHEN 'verified' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
+        combined_score DESC
+      LIMIT ${FAQ_CANDIDATES}
+    `);
+    return rows.rows;
+  }
+
+  // Fallback (no embedding available) — original lexical-only path
   if (isThai) {
     const pattern = `%${question.slice(0, 60)}%`;
-    // Trigram similarity for Thai
     const rows = await db.execute<FaqCandidate>(sql`
       SELECT
-        id,
-        question_en,
-        question_th,
-        answer_en,
-        answer_th,
-        status,
-        topic
+        id, question_en, question_th, answer_en, answer_th, status, topic
       FROM faqs
-      WHERE
-        question_th ILIKE ${pattern}
+      WHERE question_th ILIKE ${pattern}
         OR answer_th ILIKE ${pattern}
         OR similarity(question_th, ${question}) > 0.15
       ORDER BY
@@ -135,29 +190,39 @@ async function retrieveFaqCandidates(question: string): Promise<FaqCandidate[]> 
     `);
     return rows.rows;
   }
-  // English: tsquery
   const rows = await db.execute<FaqCandidate>(sql`
-    SELECT
-      id,
-      question_en,
-      question_th,
-      answer_en,
-      answer_th,
-      status,
-      topic,
-      ts_rank(search_vector_en, websearch_to_tsquery('english', ${question})) AS rank
+    SELECT id, question_en, question_th, answer_en, answer_th, status, topic,
+           ts_rank(search_vector_en, websearch_to_tsquery('english', ${question})) AS rank
     FROM faqs
     WHERE search_vector_en @@ websearch_to_tsquery('english', ${question})
-    ORDER BY
-      CASE status WHEN 'verified' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
-      rank DESC
+    ORDER BY CASE status WHEN 'verified' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
+             rank DESC
     LIMIT ${FAQ_CANDIDATES}
   `);
   return rows.rows;
 }
 
-async function retrieveRegulationCandidates(question: string): Promise<RegulationCandidate[]> {
+async function retrieveRegulationCandidates(
+  question: string,
+  questionEmbedding: number[] | null
+): Promise<RegulationCandidate[]> {
   const isThai = containsThai(question);
+  if (questionEmbedding) {
+    const vecLit = vectorToSql(questionEmbedding);
+    const rows = await db.execute<RegulationCandidate>(sql`
+      SELECT
+        id, title_th, title_en,
+        substring(coalesce(body_th, body_en, '') from 1 for 3000) AS body,
+        (1 - (embedding <=> ${vecLit}::vector)) AS sim
+      FROM regulations
+      WHERE source_type IN ('internal_playbook', 'uploaded')
+        AND embedding IS NOT NULL
+      ORDER BY embedding <=> ${vecLit}::vector
+      LIMIT ${REG_CANDIDATES}
+    `);
+    if (rows.rows.length > 0) return rows.rows;
+    // Else fall through to lexical
+  }
   if (isThai) {
     const pattern = `%${question.slice(0, 60)}%`;
     const rows = await db.execute<RegulationCandidate>(sql`
@@ -257,9 +322,13 @@ export async function askFaq(question: string): Promise<AskResponse> {
   if (trimmed.length < 5) throw new Error("question too short");
   if (trimmed.length > 1000) throw new Error("question too long");
 
+  // Try to embed the question for semantic retrieval. If embedding fails
+  // (no API key, rate limit, etc.) we fall back to pure lexical search.
+  const questionEmbedding = await tryEmbed(trimmed);
+
   const [faqs, regs] = await Promise.all([
-    retrieveFaqCandidates(trimmed),
-    retrieveRegulationCandidates(trimmed),
+    retrieveFaqCandidates(trimmed, questionEmbedding),
+    retrieveRegulationCandidates(trimmed, questionEmbedding),
   ]);
 
   const groq = new Groq({ apiKey });

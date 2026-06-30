@@ -20,7 +20,8 @@
     "load:faqs": "tsx --env-file=.env.local scripts/load-faqs.ts",
     "generate:faqs": "tsx --env-file=.env.local scripts/generate-faqs.ts",
     "audit:playbook": "tsx --env-file=.env.local scripts/audit-playbook.ts",
-    "inspect:row": "tsx --env-file=.env.local scripts/inspect-row.ts"
+    "inspect:row": "tsx --env-file=.env.local scripts/inspect-row.ts",
+    "backfill:embeddings": "tsx --env-file=.env.local scripts/backfill-embeddings.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
@@ -31,6 +32,7 @@
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-tabs": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.1.6",
+    "ai": "^6.0.216",
     "cheerio": "^1.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
