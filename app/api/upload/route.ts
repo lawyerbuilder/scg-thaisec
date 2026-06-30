@@ -17,6 +17,8 @@ import { extractFromBuffer, countWords } from "@/lib/parse-document";
 import { generateAndSaveFaqs } from "@/lib/faq-generator";
 import { containsThai } from "@/lib/utils";
 import { storeRegulationEmbedding, regulationEmbeddingText } from "@/lib/embeddings";
+import { sendFaqAssignmentEmail } from "@/lib/email";
+import { getLawyerByEmail } from "@/lib/lawyers";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -132,6 +134,17 @@ export async function POST(req: Request) {
     } catch (err) {
       faqError = (err as Error).message;
     }
+  }
+
+  // 5. Notify the assignee (best-effort — silently no-op if no key / no assignee)
+  if (assignedTo && faqResult.count > 0) {
+    const lawyer = await getLawyerByEmail(assignedTo).catch(() => null);
+    await sendFaqAssignmentEmail({
+      to: assignedTo,
+      recipientName: lawyer?.name ?? null,
+      documentTitle: title,
+      faqCount: faqResult.count,
+    });
   }
 
   return NextResponse.json({
