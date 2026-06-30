@@ -24,7 +24,8 @@
     "backfill:embeddings": "tsx --env-file=.env.local scripts/backfill-embeddings.ts",
     "inspect:docx": "tsx scripts/inspect-docx.ts",
     "backfill:translations": "tsx --env-file=.env.local scripts/backfill-translations.ts",
-    "repair:sec-urls": "tsx --env-file=.env.local scripts/repair-sec-urls.ts"
+    "repair:sec-urls": "tsx --env-file=.env.local scripts/repair-sec-urls.ts",
+    "backfill:ocr": "tsx --env-file=.env.local scripts/backfill-ocr.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
