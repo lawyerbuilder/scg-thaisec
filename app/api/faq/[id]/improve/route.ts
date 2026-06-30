@@ -28,6 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     questionEn?: unknown;
     answerTh?: unknown;
     answerEn?: unknown;
+    userInstruction?: unknown;
   } = {};
   try {
     if (req.headers.get("content-length") !== "0") {
@@ -59,6 +60,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       ? body.answerEn.trim()
       : stored.answerEn;
 
+  const userInstruction =
+    typeof body.userInstruction === "string" ? body.userInstruction.slice(0, 500) : null;
+
   try {
     const result = await improveFaq({
       faqId: id,
@@ -66,12 +70,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       currentQuestionEn,
       currentAnswerTh,
       currentAnswerEn,
+      userInstruction,
     });
     return NextResponse.json(result);
   } catch (err) {
-    return NextResponse.json(
-      { error: (err as Error).message ?? "improve failed" },
-      { status: 500 }
-    );
+    const raw = (err as Error).message ?? "improve failed";
+    // Clean up Groq's nested JSON error messages — show the lawyer a friendlier message.
+    const friendly = raw.includes("json_validate_failed")
+      ? "The AI generated invalid JSON after several attempts. Try rephrasing your instruction or click Improve again."
+      : raw.length > 200
+      ? raw.slice(0, 200) + "…"
+      : raw;
+    return NextResponse.json({ error: friendly }, { status: 500 });
   }
 }

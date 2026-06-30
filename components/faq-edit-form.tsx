@@ -43,6 +43,7 @@ export function FaqEditForm({ faq }: { faq: EditableFaq }) {
   const [improving, setImproving] = useState(false);
   const [improvement, setImprovement] = useState<Improvement | null>(null);
   const [improveError, setImproveError] = useState<string | null>(null);
+  const [improveInstruction, setImproveInstruction] = useState("");
 
   const dirty =
     draft.questionTh !== faq.questionTh ||
@@ -65,6 +66,7 @@ export function FaqEditForm({ faq }: { faq: EditableFaq }) {
           questionEn: draft.questionEn,
           answerTh: draft.answerTh,
           answerEn: draft.answerEn,
+          userInstruction: improveInstruction.trim() || null,
         }),
       });
       const json = await res.json();
@@ -114,27 +116,49 @@ export function FaqEditForm({ faq }: { faq: EditableFaq }) {
   return (
     <form className="space-y-4" onSubmit={onSubmit}>
       {/* AI improvement panel — sits above the fields */}
-      <div className="rounded-md border border-violet-200 bg-violet-50/40 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[12px] text-violet-900">
-            <Sparkles className="inline h-3.5 w-3.5 mr-1" />
-            Ask the AI to suggest a clearer, better-cited version grounded in the
-            source playbook.
-          </p>
+      <div className="rounded-md border border-violet-200 bg-violet-50/40 p-4">
+        <p className="eyebrow text-[10px] mb-2 text-violet-900 inline-flex items-center gap-1">
+          <Sparkles className="h-3 w-3" /> Improve with AI
+        </p>
+        <p className="text-[12px] text-violet-900/80 mb-3">
+          Leave blank for a general rewrite (clearer, better-cited, more
+          grounded), or type a specific instruction below — e.g. &ldquo;make
+          it shorter&rdquo;, &ldquo;add the part about quorum&rdquo;, &ldquo;cite
+          มาตรา 100&rdquo;, &ldquo;translate the Thai more formally&rdquo;.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <textarea
+            value={improveInstruction}
+            onChange={(e) => setImproveInstruction(e.target.value)}
+            disabled={improving}
+            placeholder="Optional: tell the AI what you want changed…"
+            rows={2}
+            maxLength={500}
+            className="flex-1 rounded-md border border-violet-300 bg-white px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-violet-400/40 resize-y min-h-[60px]"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                onImprove();
+              }
+            }}
+          />
           <button
             type="button"
             onClick={onImprove}
             disabled={improving}
-            className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-violet-700 disabled:opacity-60 transition-colors"
+            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-violet-600 text-white px-4 py-2 text-sm font-medium hover:bg-violet-700 disabled:opacity-60 transition-colors sm:self-start sm:min-w-[140px]"
           >
             {improving ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Sparkles className="h-3.5 w-3.5" />
+              <Sparkles className="h-4 w-4" />
             )}
-            {improving ? "Thinking…" : "Improve with AI"}
+            {improving ? "Thinking…" : "Improve"}
           </button>
         </div>
+        <p className="mt-1 text-[10px] text-violet-900/60">
+          Tip: Cmd/Ctrl + Enter to submit. {improveInstruction.length}/500 chars.
+        </p>
         {improveError && (
           <p className="mt-2 text-[12px] text-rose-700">
             <AlertCircle className="inline h-3 w-3 mr-1" />
