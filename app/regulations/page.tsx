@@ -3,6 +3,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { listRegulationTypes } from "@/lib/search";
 import { RegulationCard } from "@/components/regulation-card";
+import { RegulationAskForm } from "@/components/regulation-ask-form";
 import type { RegulationSearchRow } from "@/lib/search";
 
 export const revalidate = 300;
@@ -89,6 +90,11 @@ export default async function RegulationsPage({
       <p className="mt-1 text-sm text-muted-foreground tabular-nums">
         {total.toLocaleString()} {total === 1 ? "regulation" : "regulations"}
       </p>
+
+      {/* AI ask box — primary search entry point */}
+      <section className="mt-6 surface p-5">
+        <RegulationAskForm />
+      </section>
 
       <div className="mt-6 flex flex-wrap gap-2 text-xs">
         <Link
