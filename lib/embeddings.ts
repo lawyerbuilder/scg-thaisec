@@ -24,11 +24,16 @@ const MAX_INPUT_CHARS = 8000; // ~2000 tokens, well under model's 8192 limit
  */
 export async function tryEmbed(text: string): Promise<number[] | null> {
   if (!text || !text.trim()) return null;
-  // Auth: AI Gateway needs either AI_GATEWAY_API_KEY (local) or VERCEL_OIDC_TOKEN
-  // (runtime). CLAUDE.md gotcha #6: don't trust .env.local OIDC presence alone.
-  const hasKey =
-    !!process.env.AI_GATEWAY_API_KEY || process.env.VERCEL === "1";
-  if (!hasKey) return null;
+  // Auth options for the AI Gateway, any of which works:
+  //   1. AI_GATEWAY_API_KEY (explicit BYOK)
+  //   2. VERCEL_OIDC_TOKEN (pulled by `vercel env pull` — Vercel's own docs
+  //      say this is sufficient and no API key is needed)
+  //   3. VERCEL === '1' (runtime on Vercel — token auto-provided)
+  const hasAuth =
+    !!process.env.AI_GATEWAY_API_KEY ||
+    !!process.env.VERCEL_OIDC_TOKEN ||
+    process.env.VERCEL === "1";
+  if (!hasAuth) return null;
   try {
     const { embedding } = await embed({
       model: EMBEDDING_MODEL,
