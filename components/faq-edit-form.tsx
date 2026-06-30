@@ -121,10 +121,12 @@ export function FaqEditForm({ faq }: { faq: EditableFaq }) {
           <Sparkles className="h-3 w-3" /> Improve with AI
         </p>
         <p className="text-[12px] text-violet-900/80 mb-3">
-          Leave blank for a general rewrite (clearer, better-cited, more
-          grounded), or type a specific instruction below — e.g. &ldquo;make
-          it shorter&rdquo;, &ldquo;add the part about quorum&rdquo;, &ldquo;cite
-          มาตรา 100&rdquo;, &ldquo;translate the Thai more formally&rdquo;.
+          Rewrites both the question and the answer. Leave blank for a general
+          improvement (clearer, better-cited, more grounded), or type a specific
+          instruction — e.g. &ldquo;rephrase the question more clearly&rdquo;,
+          &ldquo;make the answer shorter&rdquo;, &ldquo;add the part about
+          quorum&rdquo;, &ldquo;cite มาตรา 100&rdquo;, &ldquo;translate the Thai
+          more formally&rdquo;.
         </p>
         <div className="flex flex-col sm:flex-row gap-2">
           <textarea

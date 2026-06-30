@@ -97,9 +97,13 @@ export default async function FaqDetailPage({
         />
       </section>
 
-      {/* Edit form */}
+      {/* Edit form — edits question + answer + topic, not just the answer */}
       <section className="mt-8 surface p-6">
-        <p className="eyebrow mb-3">Edit answer</p>
+        <p className="eyebrow mb-1">Edit FAQ</p>
+        <p className="text-[12px] text-muted-foreground mb-4">
+          Rewrite the question, the answer, or both. Useful when the original
+          question is too vague or a phrase doesn&apos;t translate well.
+        </p>
         <FaqEditForm faq={toEditableFaq(faq)} />
       </section>
     </div>
