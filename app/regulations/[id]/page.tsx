@@ -6,9 +6,8 @@ import {
   getRelatedRegulations,
 } from "@/lib/search";
 import { FavoriteButton } from "@/components/favorite-button";
-import { CopyButton } from "@/components/copy-button";
 import { RegulationCard } from "@/components/regulation-card";
-import { MarkdownBody } from "@/components/markdown-body";
+import { LocalizedBody } from "@/components/localized-body";
 
 export const revalidate = 600;
 
@@ -143,25 +142,8 @@ export default async function RegulationDetailPage({
         </div>
 
         {hasAnyBody && (
-          <div className="mt-10 space-y-6">
-            {bodyTh.trim() && (
-              <section className="surface p-6 sm:p-8 relative">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="eyebrow">{bodyEn.trim() ? "Thai" : "Full text"}</p>
-                  <CopyButton text={bodyTh} />
-                </div>
-                <MarkdownBody source={bodyTh} isThai />
-              </section>
-            )}
-            {bodyEn.trim() && (
-              <section className="surface p-6 sm:p-8 relative">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="eyebrow">English</p>
-                  <CopyButton text={bodyEn} />
-                </div>
-                <MarkdownBody source={bodyEn} />
-              </section>
-            )}
+          <div className="mt-10">
+            <LocalizedBody bodyEn={bodyEn} bodyTh={bodyTh} />
           </div>
         )}
       </article>

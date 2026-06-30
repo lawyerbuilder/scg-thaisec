@@ -3,6 +3,8 @@ import { listFaqs, listFaqTopics, countFaqs, type FaqListRow } from "@/lib/faqs"
 import { truncate, faqStaleness } from "@/lib/utils";
 import { CheckCircle2, FileQuestion, Sparkles, AlertCircle, Search, Clock, UserCheck } from "lucide-react";
 import { FaqAskForm } from "@/components/faq-ask-form";
+import { LocalizedText } from "@/components/localized-text";
+import { LocalizedTruncated } from "@/components/localized-truncated";
 
 export const dynamic = "force-dynamic";
 
@@ -203,17 +205,27 @@ function FaqRow({ faq }: { faq: FaqListRow }) {
               </span>
             )}
           </div>
-          <h3 className="text-[15px] font-medium leading-snug">
-            {faq.questionEn ?? faq.questionTh}
-          </h3>
-          {faq.questionEn && (
-            <p className="mt-0.5 text-[13px] text-muted-foreground lang-th leading-snug">
-              {faq.questionTh}
-            </p>
+          <LocalizedText
+            as="p"
+            en={faq.questionEn}
+            th={faq.questionTh}
+            className="text-[15px] font-medium leading-snug"
+          />
+          {faq.questionEn && faq.questionTh && (
+            <LocalizedText
+              as="p"
+              // Secondary line shows the OTHER language for cross-reference
+              en={faq.questionTh}
+              th={faq.questionEn}
+              className="mt-0.5 text-[13px] text-muted-foreground leading-snug"
+            />
           )}
-          <p className="mt-2 text-[13px] text-foreground/75 line-clamp-2">
-            {truncate(faq.answerEn ?? faq.answerTh, 240)}
-          </p>
+          <LocalizedTruncated
+            en={faq.answerEn}
+            th={faq.answerTh}
+            max={240}
+            className="mt-2 text-[13px] text-foreground/75 line-clamp-2"
+          />
         </div>
       </div>
     </Link>

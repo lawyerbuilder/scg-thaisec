@@ -2,18 +2,29 @@ import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import type { RegulationSearchRow } from "@/lib/search";
 import { FavoriteButton } from "./favorite-button";
+import { LocalizedText } from "./localized-text";
 
 export function RegulationCard({ row }: { row: RegulationSearchRow }) {
-  const title = row.titleEn ?? row.titleTh;
   return (
     <article className="surface surface-hover p-5">
       <div className="flex items-start justify-between gap-3">
         <Link href={`/regulations/${row.id}`} className="block flex-1 min-w-0">
-          <h3 className="text-[15px] font-medium leading-snug text-foreground line-clamp-3">
-            {title}
-          </h3>
+          <LocalizedText
+            as="p"
+            en={row.titleEn}
+            th={row.titleTh}
+            className="text-[15px] font-medium leading-snug text-foreground line-clamp-3"
+          />
           {row.titleEn && row.titleTh && (
-            <p className="mt-1 text-xs text-muted-foreground lang-th line-clamp-2">{row.titleTh}</p>
+            <LocalizedText
+              as="p"
+              // The card primary title already shows the user's preferred
+              // language; the secondary line shows the OTHER one for users
+              // who want to see both.
+              en={row.titleTh}
+              th={row.titleEn}
+              className="mt-1 text-xs text-muted-foreground line-clamp-2"
+            />
           )}
         </Link>
         <FavoriteButton id={row.id} />

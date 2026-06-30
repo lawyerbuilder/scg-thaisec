@@ -3,9 +3,10 @@ import Link from "next/link";
 import { CheckCircle2, FileQuestion, Sparkles, AlertCircle, ArrowLeft, ExternalLink, Clock, UserCheck } from "lucide-react";
 import { getFaqById, type FaqDetail } from "@/lib/faqs";
 import { faqStaleness, FAQ_STALENESS_THRESHOLD_DAYS } from "@/lib/utils";
-import { MarkdownBody } from "@/components/markdown-body";
 import { FaqVerifyControls } from "@/components/faq-verify-controls";
 import { FaqEditForm } from "@/components/faq-edit-form";
+import { LocalizedText } from "@/components/localized-text";
+import { LocalizedBody } from "@/components/localized-body";
 
 export const dynamic = "force-dynamic";
 
@@ -52,14 +53,21 @@ export default async function FaqDetailPage({
       {/* Staleness warning — verified FAQs older than 1 year */}
       <StalenessBanner verifiedAt={faq.verifiedAt} status={faq.status} />
 
-      {/* Question */}
-      <h1 className="text-2xl font-semibold tracking-tight leading-snug">
-        {faq.questionEn ?? faq.questionTh}
-      </h1>
+      {/* Question — primary in preferred locale, secondary in the other */}
+      <LocalizedText
+        as="div"
+        en={faq.questionEn}
+        th={faq.questionTh}
+        className="text-2xl font-semibold tracking-tight leading-snug"
+      />
       {faq.questionEn && faq.questionTh && faq.questionEn !== faq.questionTh && (
-        <p className="mt-2 text-base text-muted-foreground lang-th leading-snug">
-          {faq.questionTh}
-        </p>
+        <LocalizedText
+          as="p"
+          // Cross-reference line: shows the OTHER language
+          en={faq.questionTh}
+          th={faq.questionEn}
+          className="mt-2 text-base text-muted-foreground leading-snug"
+        />
       )}
 
       {/* Source link back to playbook section */}
@@ -74,20 +82,10 @@ export default async function FaqDetailPage({
         </Link>
       )}
 
-      {/* Answers */}
-      <div className="mt-8 space-y-5">
-        {faq.answerEn && (
-          <section className="surface p-6">
-            <p className="eyebrow mb-3">Answer · English</p>
-            <MarkdownBody source={faq.answerEn} />
-          </section>
-        )}
-        {faq.answerTh && (
-          <section className="surface p-6">
-            <p className="eyebrow mb-3">Answer · Thai</p>
-            <MarkdownBody source={faq.answerTh} isThai />
-          </section>
-        )}
+      {/* Answer — locale-aware. Defaults to the preferred language, with a
+          "Show both" toggle for cross-reference. */}
+      <div className="mt-8">
+        <LocalizedBody bodyEn={faq.answerEn ?? ""} bodyTh={faq.answerTh ?? ""} />
       </div>
 
       {/* Verify / reject controls */}
