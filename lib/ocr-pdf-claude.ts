@@ -25,11 +25,15 @@ const FETCH_UA =
   process.env.INGEST_USER_AGENT ??
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
-const CLAUDE_TIMEOUT_MS = 180_000; // 3 minutes per PDF
+// 6 minutes default — big SEC notifications run 50+ pages. Override per-run
+// with OCR_CLAUDE_TIMEOUT_MS for the occasional monster document.
+const CLAUDE_TIMEOUT_MS = Number(process.env.OCR_CLAUDE_TIMEOUT_MS) || 360_000;
 
 const OCR_PROMPT_TEMPLATE = (absPath: string) => `You are an OCR engine. Read the PDF at this absolute path:
 
 ${absPath}
+
+The Read tool caps PDFs at 10 pages per call. If the document is longer, call Read repeatedly with the pages parameter ("1-10", then "11-20", and so on) until you have read every page. Do not stop early.
 
 Transcribe ALL text from the PDF verbatim. Output ONLY the transcribed text — no preamble, no "Here is the transcription:", no explanations, no markdown code fences, no commentary.
 
