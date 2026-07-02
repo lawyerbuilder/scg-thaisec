@@ -199,10 +199,20 @@ function runClaude(pdfPath: string, addDir: string, pages?: string): Promise<str
     ];
 
     const isWindows = process.platform === "win32";
+    // Image-only PDFs need poppler (pdftoppm) on the child's PATH so the
+    // Read tool can rasterize pages. Shells often have a stale PATH (e.g.
+    // opened before poppler was installed), so POPPLER_BIN in .env.local
+    // injects it explicitly.
+    const env = { ...process.env };
+    if (process.env.POPPLER_BIN) {
+      const sep = isWindows ? ";" : ":";
+      env.PATH = `${process.env.POPPLER_BIN}${sep}${env.PATH ?? ""}`;
+    }
     const child = spawn("claude", args, {
       stdio: ["pipe", "pipe", "pipe"],
       shell: isWindows,
       windowsHide: true,
+      env,
     });
 
     child.stdin.write(prompt);
