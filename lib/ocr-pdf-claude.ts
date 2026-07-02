@@ -29,11 +29,10 @@ const MAX_PDF_BYTES = 20 * 1024 * 1024;
 // with OCR_CLAUDE_TIMEOUT_MS for the occasional monster document.
 const CLAUDE_TIMEOUT_MS = Number(process.env.OCR_CLAUDE_TIMEOUT_MS) || 360_000;
 
-const OCR_PROMPT_TEMPLATE = (absPath: string) => `You are an OCR engine. Read the PDF at this absolute path:
+const OCR_PROMPT_TEMPLATE = (absPath: string, pages?: string) => `You are an OCR engine. Read the PDF at this absolute path:
 
 ${absPath}
-
-The Read tool caps PDFs at 10 pages per call. If the document is longer, call Read repeatedly with the pages parameter ("1-10", then "11-20", and so on) until you have read every page. Do not stop early.
+${pages ? `\nRead ONLY pages ${pages} (pass pages: "${pages}" to the Read tool) and transcribe only those pages.` : `\nThe Read tool caps PDFs at 10 pages per call. If the document is longer, call Read repeatedly with the pages parameter ("1-10", then "11-20", and so on) until you have read every page. Do not stop early.`}
 
 Transcribe ALL text from the PDF verbatim. Output ONLY the transcribed text — no preamble, no "Here is the transcription:", no explanations, no markdown code fences, no commentary.
 
@@ -46,9 +45,32 @@ REQUIREMENTS
 
 If the PDF contains NO readable text (e.g. blank pages or pure images without text), respond with exactly: EMPTY`;
 
-export async function ocrPdfViaClaude(url: string): Promise<string | null> {
-  // 1. Download the PDF
-  let buffer: Buffer;
+/**
+ * Reject model output that is assistant chatter rather than a transcription.
+ * Failure mode observed on reg 695 (82-page scan): the model gave up mid-way
+ * and returned "Would you like me to extract specific page ranges?" — which
+ * the pipeline then stored as the document body. Tuned for the Thai SEC
+ * corpus: real transcriptions are predominantly Thai script.
+ */
+export function looksLikeTranscription(text: string): boolean {
+  const head = text.slice(0, 400).toLowerCase();
+  const tail = text.slice(-400).toLowerCase();
+  const CHATTER = [
+    "i'll provide",
+    "i'll continue",
+    "i've successfully",
+    "here's the content",
+    "here is the transcription",
+    "based on the extraction",
+    "would you like",
+    "let me know if",
+  ];
+  if (CHATTER.some((c) => head.includes(c) || tail.includes(c))) return false;
+  const thaiChars = (text.match(/[฀-๿]/g) ?? []).length;
+  return thaiChars / text.length >= 0.1;
+}
+
+async function downloadPdf(url: string): Promise<Buffer | null> {
   try {
     const res = await fetch(url, {
       headers: {
@@ -68,23 +90,34 @@ export async function ocrPdfViaClaude(url: string): Promise<string | null> {
       console.warn(`[ocr-claude] ${url} too large (${ab.byteLength} bytes)`);
       return null;
     }
-    buffer = Buffer.from(ab);
+    return Buffer.from(ab);
   } catch (err) {
     console.warn(`[ocr-claude] fetch error: ${(err as Error).message}`);
     return null;
   }
+}
 
-  // 2. Write to temp file
+export async function ocrPdfViaClaude(
+  url: string,
+  opts: { pages?: string } = {}
+): Promise<string | null> {
+  const buffer = await downloadPdf(url);
+  if (!buffer) return null;
+
   const tempDir = await mkdtemp(join(tmpdir(), "scg-ocr-"));
   const pdfPath = join(tempDir, "doc.pdf");
   try {
     await writeFile(pdfPath, buffer);
-
-    // 3. Spawn claude
-    const text = await runClaude(pdfPath, tempDir);
+    const text = await runClaude(pdfPath, tempDir, opts.pages);
     if (!text) return null;
     const trimmed = text.trim();
     if (trimmed === "EMPTY") return null;
+    if (!looksLikeTranscription(trimmed)) {
+      console.warn(
+        `[ocr-claude] output rejected by validation gate (chatter or non-Thai): ${trimmed.slice(0, 80)}…`
+      );
+      return null;
+    }
     return trimmed;
   } catch (err) {
     console.warn(`[ocr-claude] subprocess failed: ${(err as Error).message?.slice(0, 200)}`);
@@ -94,9 +127,9 @@ export async function ocrPdfViaClaude(url: string): Promise<string | null> {
   }
 }
 
-function runClaude(pdfPath: string, addDir: string): Promise<string> {
+function runClaude(pdfPath: string, addDir: string, pages?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const prompt = OCR_PROMPT_TEMPLATE(pdfPath);
+    const prompt = OCR_PROMPT_TEMPLATE(pdfPath, pages);
     // Pass prompt via stdin instead of as a CLI argument — avoids the Windows
     // shell-quoting problem (the prompt has newlines, slashes, Thai chars,
     // and the absolute path is a heavy quoting target). claude reads from
