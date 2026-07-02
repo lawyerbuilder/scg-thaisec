@@ -20,6 +20,7 @@ import { spawn } from "node:child_process";
 import { writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getDocumentProxy } from "unpdf";
 
 const FETCH_UA =
   process.env.INGEST_USER_AGENT ??
@@ -97,6 +98,45 @@ async function downloadPdf(url: string): Promise<Buffer | null> {
   }
 }
 
+// Documents longer than this are OCR'd in CHUNK_PAGES ranges, one claude
+// call per range, concatenated. Single-shot transcription of 80-page scans
+// fails in practice: the model runs out of steam and starts chatting.
+const AUTO_CHUNK_THRESHOLD = 12;
+const CHUNK_PAGES = 10;
+
+async function pdfPageCount(buffer: Buffer): Promise<number | null> {
+  try {
+    const u8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const doc = await getDocumentProxy(u8);
+    return doc.numPages;
+  } catch {
+    return null;
+  }
+}
+
+/** One claude invocation over the whole doc or a page range, validated. */
+async function ocrOnce(
+  pdfPath: string,
+  addDir: string,
+  pages?: string
+): Promise<string | null> {
+  try {
+    const text = await runClaude(pdfPath, addDir, pages);
+    const trimmed = text?.trim();
+    if (!trimmed || trimmed === "EMPTY") return null;
+    if (!looksLikeTranscription(trimmed)) {
+      console.warn(
+        `[ocr-claude] output rejected by validation gate (chatter or non-Thai): ${trimmed.slice(0, 80)}…`
+      );
+      return null;
+    }
+    return trimmed;
+  } catch (err) {
+    console.warn(`[ocr-claude] subprocess failed: ${(err as Error).message?.slice(0, 200)}`);
+    return null;
+  }
+}
+
 export async function ocrPdfViaClaude(
   url: string,
   opts: { pages?: string } = {}
@@ -108,20 +148,32 @@ export async function ocrPdfViaClaude(
   const pdfPath = join(tempDir, "doc.pdf");
   try {
     await writeFile(pdfPath, buffer);
-    const text = await runClaude(pdfPath, tempDir, opts.pages);
-    if (!text) return null;
-    const trimmed = text.trim();
-    if (trimmed === "EMPTY") return null;
-    if (!looksLikeTranscription(trimmed)) {
-      console.warn(
-        `[ocr-claude] output rejected by validation gate (chatter or non-Thai): ${trimmed.slice(0, 80)}…`
-      );
-      return null;
+
+    // Caller pinned an explicit range → single call, no auto-chunking.
+    if (opts.pages) return await ocrOnce(pdfPath, tempDir, opts.pages);
+
+    const pageCount = await pdfPageCount(buffer);
+    if (pageCount === null || pageCount <= AUTO_CHUNK_THRESHOLD) {
+      return await ocrOnce(pdfPath, tempDir);
     }
-    return trimmed;
-  } catch (err) {
-    console.warn(`[ocr-claude] subprocess failed: ${(err as Error).message?.slice(0, 200)}`);
-    return null;
+
+    // Chunked mode for long documents.
+    console.log(`[ocr-claude] ${pageCount} pages — chunking into ranges of ${CHUNK_PAGES}`);
+    const parts: string[] = [];
+    const skipped: string[] = [];
+    for (let start = 1; start <= pageCount; start += CHUNK_PAGES) {
+      const end = Math.min(start + CHUNK_PAGES - 1, pageCount);
+      const range = `${start}-${end}`;
+      const chunk = await ocrOnce(pdfPath, tempDir, range);
+      if (chunk) parts.push(chunk);
+      else skipped.push(range);
+    }
+    if (skipped.length > 0) {
+      console.warn(
+        `[ocr-claude] ${skipped.length}/${Math.ceil(pageCount / CHUNK_PAGES)} chunks skipped (blank or rejected): ${skipped.join(", ")}`
+      );
+    }
+    return parts.length > 0 ? parts.join("\n\n") : null;
   } finally {
     await rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
