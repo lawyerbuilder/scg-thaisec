@@ -21,7 +21,10 @@ import {
   regulationEmbeddingText,
 } from "@/lib/embeddings";
 
-const PER_CALL_DELAY_MS = 100;
+// Default 100ms is fine once the gateway has a payment method. On the free
+// tier the embedding model is throttled to a low requests-per-minute, so
+// override with EMBED_DELAY_MS (e.g. 7000 = ~8/min) to stay under the cap.
+const PER_CALL_DELAY_MS = Number(process.env.EMBED_DELAY_MS) || 100;
 
 async function backfillFaqs() {
   const rows = await db.execute<{

@@ -35,9 +35,17 @@ export async function tryEmbed(text: string): Promise<number[] | null> {
     process.env.VERCEL === "1";
   if (!hasAuth) return null;
   try {
+    // On the free tier the AI SDK's default 2 internal retries turn each call
+    // into a 3-request burst that trips the RPM cap. EMBED_MAX_RETRIES=0 makes
+    // it exactly one request per item so a paced backfill stays under the cap.
+    const maxRetries =
+      process.env.EMBED_MAX_RETRIES !== undefined
+        ? Number(process.env.EMBED_MAX_RETRIES)
+        : 2;
     const { embedding } = await embed({
       model: EMBEDDING_MODEL,
       value: text.slice(0, MAX_INPUT_CHARS),
+      maxRetries,
     });
     if (!Array.isArray(embedding) || embedding.length !== EMBEDDING_DIM) {
       console.warn(
