@@ -8,7 +8,8 @@
  *
  * Excludes:
  *   - /api/mcp/* — MCP must stay reachable for Claude / ChatGPT clients.
- *     Proper auth on MCP write tools is a separate TODO (Clerk).
+ *     Read tools are intentionally open; the write tools enforce their own
+ *     bearer-token gate (MCP_WRITE_TOKEN) inside app/api/mcp/route.ts.
  *   - Next.js static assets and favicons.
  *
  * Username is ignored — any username works as long as the password matches.

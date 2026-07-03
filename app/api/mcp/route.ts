@@ -1,4 +1,5 @@
 import { createMcpHandler } from "mcp-handler";
+import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import {
@@ -34,11 +35,10 @@ function stripMarkTags(text: string): string {
 }
 
 /**
- * TODO(auth): all write tools below currently accept any caller. When Clerk
- * is wired, derive the email from a session token passed via MCP request
- * headers (mcp-handler exposes this) and check it against an env-configured
- * allowlist. Until then, every write tool just stamps 'mcp@scg-thaisec.local'
- * as the actor and proceeds.
+ * Actor stamped on MCP-originated writes for the audit trail. The caller is
+ * authenticated by the bearer token (see `requireMcpWrite`); until Clerk lands
+ * we don't yet map a token to an individual person, so all authorized MCP
+ * writes share this synthetic actor.
  */
 async function getMcpCallerEmail(): Promise<string> {
   return "mcp@scg-thaisec.local";
@@ -49,6 +49,62 @@ function jsonResult(payload: unknown, isError = false) {
     content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
     isError,
   };
+}
+
+/**
+ * Header bag as delivered to MCP tool callbacks. The StreamableHTTP transport
+ * forwards the original request headers on `extra.requestInfo.headers`.
+ */
+type McpRequestExtra = {
+  requestInfo?: { headers?: Record<string, string | string[] | undefined> };
+};
+
+function readHeader(extra: McpRequestExtra, name: string): string | null {
+  const headers = extra?.requestInfo?.headers;
+  if (!headers) return null;
+  const value = headers[name] ?? headers[name.toLowerCase()];
+  if (Array.isArray(value)) return value[0] ?? null;
+  return typeof value === "string" ? value : null;
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
+/**
+ * Auth gate for MCP *write* tools. Read tools stay open — that's the point of a
+ * public MCP endpoint — but every mutating tool must present
+ * `Authorization: Bearer <MCP_WRITE_TOKEN>`. Returns an MCP error result to
+ * short-circuit on, or null when the caller is authorized.
+ *
+ * Fails closed: if MCP_WRITE_TOKEN is unset, every write is refused. We never
+ * want an unauthenticated write path reachable from the internet (these tools
+ * mark FAQs "verified", rewrite answers, insert docs, and burn AI spend).
+ */
+function requireMcpWrite(extra: McpRequestExtra) {
+  const expected = process.env.MCP_WRITE_TOKEN;
+  if (!expected) {
+    return jsonResult(
+      { error: "MCP write tools are disabled: the server has no MCP_WRITE_TOKEN configured." },
+      true
+    );
+  }
+  const header = readHeader(extra, "authorization") ?? "";
+  const token = /^bearer\s+/i.test(header) ? header.replace(/^bearer\s+/i, "").trim() : "";
+  if (!token || !constantTimeEqual(token, expected)) {
+    return jsonResult(
+      {
+        error:
+          "Unauthorized. This tool mutates data and requires a bearer token — set " +
+          "'Authorization: Bearer <MCP_WRITE_TOKEN>' in your MCP client config.",
+      },
+      true
+    );
+  }
+  return null;
 }
 
 const handler = createMcpHandler(
@@ -323,7 +379,8 @@ const handler = createMcpHandler(
     );
 
     // =====================================================================
-    // ADMIN WRITE TOOLS — currently unprotected (TODO: Clerk allowlist)
+    // ADMIN WRITE TOOLS — gated by requireMcpWrite (Bearer MCP_WRITE_TOKEN).
+    // Callers without a valid token get an error result; reads stay open.
     // =====================================================================
 
     server.tool(
@@ -340,7 +397,9 @@ const handler = createMcpHandler(
           .optional()
           .describe('Optional source filename (e.g. "AGM_memo_2025.pdf") for audit trail'),
       },
-      async ({ title, body, original_filename }) => {
+      async ({ title, body, original_filename }, extra) => {
+        const denied = requireMcpWrite(extra);
+        if (denied) return denied;
         const actor = await getMcpCallerEmail();
         const looksThai = containsThai(body.slice(0, 500));
         const typeRow = await db.execute<{ id: number }>(
@@ -394,7 +453,9 @@ const handler = createMcpHandler(
       {
         regulation_id: z.number().int().describe("Source regulation ID"),
       },
-      async ({ regulation_id }) => {
+      async ({ regulation_id }, extra) => {
+        const denied = requireMcpWrite(extra);
+        if (denied) return denied;
         const reg = await getRegulationById(regulation_id);
         if (!reg) return jsonResult({ error: "Regulation not found", id: regulation_id }, true);
         if (!reg.bodyTh && !reg.bodyEn) {
@@ -434,7 +495,9 @@ const handler = createMcpHandler(
         "status='verified', records who verified and when. Use after manually " +
         "reviewing the Q+A for accuracy.",
       { faq_id: z.number().int().describe("FAQ ID to verify") },
-      async ({ faq_id }) => {
+      async ({ faq_id }, extra) => {
+        const denied = requireMcpWrite(extra);
+        if (denied) return denied;
         const actor = await getMcpCallerEmail();
         const updated = await verifyFaq(faq_id, actor);
         if (!updated) return jsonResult({ error: "FAQ not found", id: faq_id }, true);
@@ -454,7 +517,9 @@ const handler = createMcpHandler(
         "outdated, etc.). Sets status='rejected', records who rejected and when. " +
         "Does not delete — call `update_faq` to fix and re-verify instead.",
       { faq_id: z.number().int().describe("FAQ ID to reject") },
-      async ({ faq_id }) => {
+      async ({ faq_id }, extra) => {
+        const denied = requireMcpWrite(extra);
+        if (denied) return denied;
         const actor = await getMcpCallerEmail();
         const updated = await rejectFaq(faq_id, actor);
         if (!updated) return jsonResult({ error: "FAQ not found", id: faq_id }, true);
@@ -481,7 +546,9 @@ const handler = createMcpHandler(
         answer_en: z.string().optional(),
         topic: z.string().optional(),
       },
-      async ({ faq_id, question_th, question_en, answer_th, answer_en, topic }) => {
+      async ({ faq_id, question_th, question_en, answer_th, answer_en, topic }, extra) => {
+        const denied = requireMcpWrite(extra);
+        if (denied) return denied;
         const updated = await updateFaqContent(faq_id, {
           questionTh: question_th,
           questionEn: question_en,
