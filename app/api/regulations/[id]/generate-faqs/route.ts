@@ -3,11 +3,15 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { generateAndSaveFaqs } from "@/lib/faq-generator";
 import { getCurrentPermissions } from "@/lib/auth";
+import { rateLimit, clientIp, tooManyRequests } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const rl = rateLimit(`regulations:generate-faqs:${clientIp(req)}`, { limit: 10, windowSec: 60 });
+  if (!rl.ok) return tooManyRequests(rl);
+
   const perms = await getCurrentPermissions();
   if (!perms.canGenerateFaqs) {
     return NextResponse.json(

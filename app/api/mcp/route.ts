@@ -21,6 +21,7 @@ import {
 import { generateAndSaveFaqs } from "@/lib/faq-generator";
 import { db } from "@/lib/db";
 import { containsThai } from "@/lib/utils";
+import { rateLimit } from "@/lib/rate-limit";
 
 const SITE = process.env.THAISEC_SITE_URL ?? "https://scg-thaisec.vercel.app";
 
@@ -456,6 +457,14 @@ const handler = createMcpHandler(
       async ({ regulation_id }, extra) => {
         const denied = requireMcpWrite(extra);
         if (denied) return denied;
+        const ip = readHeader(extra, "x-forwarded-for")?.split(",")[0]?.trim() || "mcp";
+        const rl = rateLimit(`mcp:generate:${ip}`, { limit: 10, windowSec: 60 });
+        if (!rl.ok) {
+          return jsonResult(
+            { error: `Rate limit exceeded — retry in ${rl.retryAfterSec}s.` },
+            true
+          );
+        }
         const reg = await getRegulationById(regulation_id);
         if (!reg) return jsonResult({ error: "Regulation not found", id: regulation_id }, true);
         if (!reg.bodyTh && !reg.bodyEn) {

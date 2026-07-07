@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { askRegulations } from "@/lib/regulation-ask";
+import { rateLimit, clientIp, tooManyRequests } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
+  const rl = rateLimit(`regulations:ask:${clientIp(req)}`, { limit: 20, windowSec: 60 });
+  if (!rl.ok) return tooManyRequests(rl);
+
   let body: { question?: unknown };
   try {
     body = await req.json();

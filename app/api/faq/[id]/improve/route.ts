@@ -13,11 +13,15 @@ import { NextResponse } from "next/server";
 import { improveFaq } from "@/lib/faq-improve";
 import { getFaqById } from "@/lib/faqs";
 import { requirePermission } from "@/lib/auth";
+import { rateLimit, clientIp, tooManyRequests } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const rl = rateLimit(`faq:improve:${clientIp(req)}`, { limit: 10, windowSec: 60 });
+  if (!rl.ok) return tooManyRequests(rl);
+
   try {
     await requirePermission("canImproveFaq");
   } catch {
