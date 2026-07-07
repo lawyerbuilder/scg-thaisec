@@ -5,15 +5,25 @@
  * Saves an AI-suggested Q+A from /api/faq/ask into the faqs table as a real
  * draft. The lawyer reviewer is expected to edit + verify it after creation.
  *
- * TODO(auth): gate with Clerk allowlist — same TODO as everywhere else.
+ * Gated on canEditFaq — inserting a draft FAQ is a write to the corpus.
  */
 
 import { NextResponse } from "next/server";
 import { saveSuggestionAsDraft } from "@/lib/faq-ask";
+import { requirePermission } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  try {
+    await requirePermission("canEditFaq");
+  } catch {
+    return NextResponse.json(
+      { error: "Permission denied: saving a draft FAQ requires FAQ-edit rights." },
+      { status: 403 }
+    );
+  }
+
   let body: {
     questionTh?: unknown;
     questionEn?: unknown;

@@ -6,8 +6,9 @@
  * FAQs grounded in the content. Returns the new regulation id + FAQ count
  * so the UI can redirect to /faq filtered to those new rows.
  *
- * TODO(auth): gate this with Clerk + allowlist. For now anyone can upload —
- * matches the same TODO in app/faq/[id]/actions.ts.
+ * Gated on canUploadDocument. The signed-in user's email is stamped as
+ * uploaded_by so the verified-notification flow (actions.ts) can reach them —
+ * it skips '*.local' uploaders, so a hardcoded placeholder silently killed it.
  */
 
 import { NextResponse } from "next/server";
@@ -19,7 +20,7 @@ import { containsThai } from "@/lib/utils";
 import { storeRegulationEmbedding, regulationEmbeddingText } from "@/lib/embeddings";
 import { sendFaqAssignmentEmail } from "@/lib/email";
 import { getLawyerByEmail } from "@/lib/lawyers";
-import { getCurrentPermissions } from "@/lib/auth";
+import { getCurrentUser, permissionsFor } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -27,13 +28,15 @@ export const maxDuration = 60;
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export async function POST(req: Request) {
-  const perms = await getCurrentPermissions();
+  const currentUser = await getCurrentUser();
+  const perms = permissionsFor(currentUser ?? null);
   if (!perms.canUploadDocument) {
     return NextResponse.json(
       { error: "Permission denied: uploading documents requires an admin role." },
       { status: 403 }
     );
   }
+  const uploadedBy = currentUser?.email ?? "preview@scg-thaisec.local";
 
   let formData: FormData;
   try {
@@ -111,7 +114,7 @@ export async function POST(req: Request) {
       ${bodyTh},
       ${bodyEn},
       ${countWords(extracted.text)},
-      ${"preview@scg-thaisec.local"},
+      ${uploadedBy},
       ${file.name}
     )
     RETURNING id

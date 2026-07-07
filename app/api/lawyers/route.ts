@@ -2,12 +2,14 @@
  * GET  /api/lawyers          → list all (admin view) — pass ?active=1 to filter
  * POST /api/lawyers          → create or upsert by email
  *
- * TODO(auth): gate POST with Clerk + role='admin'. GET stays public so the
- * upload form dropdown can populate without auth (we only return safe fields).
+ * POST is gated on canManageRoster (admin) — creating a lawyer, especially an
+ * admin one, is a privilege-escalation vector. GET stays public so the upload
+ * form dropdown can populate without auth (we only return safe fields).
  */
 
 import { NextResponse } from "next/server";
 import { listLawyers, createLawyer } from "@/lib/lawyers";
+import { requirePermission } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -19,6 +21,15 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  try {
+    await requirePermission("canManageRoster");
+  } catch {
+    return NextResponse.json(
+      { error: "Permission denied: managing the lawyer roster requires an admin role." },
+      { status: 403 }
+    );
+  }
+
   let body: { email?: unknown; name?: unknown; role?: unknown; notes?: unknown };
   try {
     body = await req.json();

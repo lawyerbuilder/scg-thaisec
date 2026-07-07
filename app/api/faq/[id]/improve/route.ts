@@ -6,17 +6,27 @@
  *  can pass the current edit-form draft to be improved.)
  *
  * Returns ImprovementResponse from lib/faq-improve.ts.
- * TODO(auth): gate with Clerk allowlist.
+ * Gated on canImproveFaq — this spends LLM budget on every call.
  */
 
 import { NextResponse } from "next/server";
 import { improveFaq } from "@/lib/faq-improve";
 import { getFaqById } from "@/lib/faqs";
+import { requirePermission } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    await requirePermission("canImproveFaq");
+  } catch {
+    return NextResponse.json(
+      { error: "Permission denied: improving an FAQ requires the improve permission." },
+      { status: 403 }
+    );
+  }
+
   const { id: rawId } = await params;
   const id = Number(rawId);
   if (!Number.isFinite(id)) {

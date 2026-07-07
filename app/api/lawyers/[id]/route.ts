@@ -6,10 +6,19 @@
 
 import { NextResponse } from "next/server";
 import { updateLawyer } from "@/lib/lawyers";
+import { requirePermission } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    await requirePermission("canManageRoster");
+  } catch {
+    return NextResponse.json(
+      { error: "Permission denied: managing the lawyer roster requires an admin role." },
+      { status: 403 }
+    );
+  }
   const { id: rawId } = await params;
   const id = Number(rawId);
   if (!Number.isFinite(id)) {
@@ -52,6 +61,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    await requirePermission("canManageRoster");
+  } catch {
+    return NextResponse.json(
+      { error: "Permission denied: managing the lawyer roster requires an admin role." },
+      { status: 403 }
+    );
+  }
   const { id: rawId } = await params;
   const id = Number(rawId);
   if (!Number.isFinite(id)) {
