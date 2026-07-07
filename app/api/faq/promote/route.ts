@@ -11,6 +11,7 @@
 import { NextResponse } from "next/server";
 import { saveSuggestionAsDraft } from "@/lib/faq-ask";
 import { requirePermission } from "@/lib/auth";
+import { apiError } from "@/lib/api-error";
 
 export const runtime = "nodejs";
 
@@ -57,9 +58,8 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ id, faqUrl: `/faq/${id}` });
   } catch (err) {
-    return NextResponse.json(
-      { error: (err as Error).message ?? "promote failed" },
-      { status: 500 }
-    );
+    return apiError(err, "Could not save the suggestion. Please try again.", {
+      context: "faq/promote",
+    });
   }
 }

@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { listLawyers, createLawyer } from "@/lib/lawyers";
 import { requirePermission } from "@/lib/auth";
+import { apiError } from "@/lib/api-error";
 
 export const runtime = "nodejs";
 
@@ -52,9 +53,9 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ lawyer });
   } catch (err) {
-    return NextResponse.json(
-      { error: (err as Error).message ?? "create failed" },
-      { status: 400 }
-    );
+    return apiError(err, "Could not create the lawyer. Check the details and try again.", {
+      status: 400,
+      context: "lawyers/create",
+    });
   }
 }

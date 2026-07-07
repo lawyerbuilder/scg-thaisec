@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { askFaq } from "@/lib/faq-ask";
 import { rateLimit, clientIp, tooManyRequests } from "@/lib/rate-limit";
+import { apiError } from "@/lib/api-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -32,9 +33,8 @@ export async function POST(req: Request) {
     const result = await askFaq(body.question);
     return NextResponse.json(result);
   } catch (err) {
-    return NextResponse.json(
-      { error: (err as Error).message ?? "ask failed" },
-      { status: 500 }
-    );
+    return apiError(err, "Could not answer your question. Please try again.", {
+      context: "faq/ask",
+    });
   }
 }

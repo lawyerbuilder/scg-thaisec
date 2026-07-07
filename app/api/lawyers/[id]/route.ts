@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { updateLawyer } from "@/lib/lawyers";
 import { requirePermission } from "@/lib/auth";
+import { apiError } from "@/lib/api-error";
 
 export const runtime = "nodejs";
 
@@ -53,10 +54,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!lawyer) return NextResponse.json({ error: "not found" }, { status: 404 });
     return NextResponse.json({ lawyer });
   } catch (err) {
-    return NextResponse.json(
-      { error: (err as Error).message ?? "update failed" },
-      { status: 400 }
-    );
+    return apiError(err, "Could not update the lawyer. Check the details and try again.", {
+      status: 400,
+      context: "lawyers/update",
+    });
   }
 }
 

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { generateAndSaveFaqs } from "@/lib/faq-generator";
 import { getCurrentPermissions } from "@/lib/auth";
 import { rateLimit, clientIp, tooManyRequests } from "@/lib/rate-limit";
+import { apiError } from "@/lib/api-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -64,9 +65,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       faqIds: result.faqIds,
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: (err as Error).message ?? "FAQ generation failed" },
-      { status: 500 }
-    );
+    return apiError(err, "FAQ generation failed. Please try again.", {
+      context: "regulations/generate-faqs",
+    });
   }
 }
