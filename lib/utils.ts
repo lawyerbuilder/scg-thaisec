@@ -41,6 +41,32 @@ export function containsThai(s: string): boolean {
   return /[฀-๿]/.test(s);
 }
 
+/** Escape the five HTML metacharacters so a string is inert as HTML. */
+export function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Make a Postgres FTS snippet safe to render as HTML.
+ *
+ * `ts_headline` wraps matches in literal <mark>…</mark> but does NOT escape the
+ * surrounding body text — and regulation bodies are writable (the MCP upload
+ * tool), so a crafted `<img onerror=…>` in a body would otherwise execute in a
+ * reader's browser straight from the search results. We escape everything,
+ * then re-enable ONLY the exact <mark>/</mark> highlight tags ts_headline
+ * inserts. Any other markup — including <mark> with attributes — stays inert.
+ */
+export function highlightSnippetHtml(raw: string): string {
+  return escapeHtml(raw)
+    .replace(/&lt;mark&gt;/g, "<mark>")
+    .replace(/&lt;\/mark&gt;/g, "</mark>");
+}
+
 /**
  * FAQs lose accuracy as the underlying regulations evolve. Verified content
  * older than this threshold gets a "may be stale" warning on the UI so users

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import type { RegulationSearchRow } from "@/lib/search";
+import { highlightSnippetHtml } from "@/lib/utils";
 import { FavoriteButton } from "./favorite-button";
 import { LocalizedText } from "./localized-text";
 
@@ -33,9 +34,11 @@ export function RegulationCard({ row }: { row: RegulationSearchRow }) {
       {row.bodySnippet && (
         <p
           className="mt-3 text-sm text-muted-foreground leading-relaxed line-clamp-3"
-          // FTS produces <mark>…</mark> tags; we render them verbatim. Snippet
-          // text comes from Postgres ts_headline / substring — no user input.
-          dangerouslySetInnerHTML={{ __html: row.bodySnippet }}
+          // FTS produces <mark>…</mark> highlights, but the surrounding body is
+          // attacker-writable (MCP upload) and unescaped by ts_headline, so we
+          // escape everything and re-enable only the <mark> tags. See
+          // highlightSnippetHtml.
+          dangerouslySetInnerHTML={{ __html: highlightSnippetHtml(row.bodySnippet) }}
         />
       )}
 
